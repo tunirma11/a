@@ -193,11 +193,13 @@ export function renderMessages(messages, currentUsername, currentUid, pendingLoc
     html += `
       <div class="msg-row ${rowClass}" style="animation-delay:${delay}s">
         <div class="msg-bubble ${pendingClass} ${failedClass}">
-          <span class="msg-text">${escapeHtml(msg.text)}</span>
-          <div class="msg-meta">
-            <span class="msg-time">${formatTime(ts)}</span>
-            ${statusHtml}
-            ${retryBtn}
+          <div class="msg-body">
+            <span class="msg-text">${escapeHtml(msg.text)}</span>
+            <div class="msg-meta">
+              <span class="msg-time">${formatTime(ts)}</span>
+              ${statusHtml}
+              ${retryBtn}
+            </div>
           </div>
         </div>
       </div>`;
@@ -209,7 +211,28 @@ export function renderMessages(messages, currentUsername, currentUid, pendingLoc
     btn.addEventListener("click", () => onRetry?.(btn.dataset.localId));
   });
 
+  syncBubbleWidths(container);
   scrollToBottom();
+}
+
+function syncBubbleWidths(container) {
+  const bubbles = [...container.querySelectorAll(".msg-row .msg-bubble")];
+  if (bubbles.length < 2) return;
+
+  requestAnimationFrame(() => {
+    bubbles.forEach((bubble) => {
+      bubble.style.minWidth = "";
+    });
+
+    bubbles.forEach((bubble, index) => {
+      if (index === 0) return;
+      const prevWidth = Math.ceil(bubbles[index - 1].getBoundingClientRect().width);
+      const curWidth = Math.ceil(bubble.getBoundingClientRect().width);
+      if (prevWidth > curWidth) {
+        bubble.style.minWidth = `${prevWidth}px`;
+      }
+    });
+  });
 }
 
 export function scrollToBottom(smooth = true) {

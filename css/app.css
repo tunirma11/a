@@ -325,6 +325,7 @@ html, body {
 
 .msg-row {
   display: flex;
+  width: 100%;
   margin-bottom: 3px;
   animation: msgSlideIn 0.32s var(--ease-out-expo) both;
 }
@@ -345,15 +346,15 @@ html, body {
 
 .msg-bubble {
   position: relative;
-  max-width: min(78%, 420px);
+  width: fit-content;
+  max-width: min(85%, 480px);
   padding: 0.45rem 0.65rem 0.35rem 0.75rem;
   border-radius: 8px;
   font-size: 0.9375rem;
   line-height: 1.45;
   word-wrap: break-word;
-  white-space: pre-wrap;
   box-shadow: var(--shadow-bubble);
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  transition: min-width 0.2s var(--ease-out-expo), transform 0.15s ease, box-shadow 0.15s ease;
 }
 
 .msg-row.own .msg-bubble {
@@ -400,21 +401,33 @@ html, body {
   box-shadow: 0 0 0 2px #ea4335, var(--shadow-bubble);
 }
 
-.msg-text { display: block; padding-right: 2px; }
+.msg-body {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: flex-end;
+  gap: 4px 8px;
+  width: 100%;
+}
+
+.msg-text {
+  flex: 1 1 auto;
+  min-width: min(100%, 12rem);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
 
 .msg-meta {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: flex-end;
   gap: 4px;
-  margin-top: 2px;
+  flex: 0 0 auto;
+  margin-left: auto;
   font-size: 0.68rem;
   line-height: 1;
   color: #667781;
-  float: right;
-  margin-left: 8px;
-  position: relative;
-  top: 4px;
+  white-space: nowrap;
 }
 
 .msg-row.own .msg-meta { color: #667781; }
