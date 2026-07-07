@@ -126,6 +126,48 @@ export async function dismissInstallPrompt() {
 }
 
 const DEVICE_SESSION_KEY = "deviceSession";
+const ADMIN_SESSION_KEY = "adminSession";
+const ROOM_SESSION_KEY = "roomSession";
+
+export async function getAdminSession() {
+  return getPreference(ADMIN_SESSION_KEY);
+}
+
+export async function saveAdminSession(session) {
+  if (!session) {
+    const store = await tx(PREFS_STORE, "readwrite");
+    return new Promise((resolve, reject) => {
+      const req = store.delete(ADMIN_SESSION_KEY);
+      req.onsuccess = () => resolve();
+      req.onerror = () => reject(req.error);
+    });
+  }
+  return setPreference(ADMIN_SESSION_KEY, session);
+}
+
+export async function clearAdminSession() {
+  return saveAdminSession(null);
+}
+
+export async function getRoomSession() {
+  return getPreference(ROOM_SESSION_KEY);
+}
+
+export async function saveRoomSession(session) {
+  if (!session) {
+    const store = await tx(PREFS_STORE, "readwrite");
+    return new Promise((resolve, reject) => {
+      const req = store.delete(ROOM_SESSION_KEY);
+      req.onsuccess = () => resolve();
+      req.onerror = () => reject(req.error);
+    });
+  }
+  return setPreference(ROOM_SESSION_KEY, session);
+}
+
+export async function clearRoomSession() {
+  return saveRoomSession(null);
+}
 
 export async function getDeviceSession() {
   return getPreference(DEVICE_SESSION_KEY);

@@ -1,19 +1,40 @@
 import { ROOM_ID_PATTERN } from "./constants.js";
 
-const ROOM_ROUTE_PREFIX = "#/room/";
+const ADMIN_HASH = "#/admin";
+
+function extractRoomId(hash) {
+  const patterns = [/^#\/room\/([a-z0-9]+)/i, /^#room\/([a-z0-9]+)/i];
+  for (const pattern of patterns) {
+    const match = hash.match(pattern);
+    if (match && ROOM_ID_PATTERN.test(match[1])) return match[1];
+  }
+  return null;
+}
+
+export function parseRoute() {
+  const hash = window.location.hash || "";
+  if (hash === ADMIN_HASH || hash.startsWith(`${ADMIN_HASH}/`)) {
+    return { view: "admin" };
+  }
+  const roomId = extractRoomId(hash);
+  if (roomId) return { view: "room", roomId };
+  return { view: "home" };
+}
 
 export function getRoomIdFromHash() {
-  const hash = window.location.hash || "";
-  if (!hash.startsWith(ROOM_ROUTE_PREFIX)) return null;
-  const id = hash.slice(ROOM_ROUTE_PREFIX.length).split(/[?#/]/)[0];
-  return id && ROOM_ID_PATTERN.test(id) ? id : null;
+  return extractRoomId(window.location.hash || "");
 }
 
 export function navigateToRoom(roomId) {
-  const next = `${ROOM_ROUTE_PREFIX}${roomId}`;
-  if (window.location.hash !== next) {
-    window.location.hash = `room/${roomId}`;
-  }
+  window.location.hash = `room/${roomId}`;
+}
+
+export function navigateToAdmin() {
+  window.location.hash = "admin";
+}
+
+export function navigateToHome() {
+  window.location.hash = "";
 }
 
 export function buildShareLink(roomId) {
@@ -25,15 +46,18 @@ export function parseRoomIdFromInput(input) {
   const trimmed = String(input || "").trim();
   if (!trimmed) return null;
 
-  const hashMatch = trimmed.match(/#\/room\/([a-zA-Z0-9_-]+)/);
-  if (hashMatch && ROOM_ID_PATTERN.test(hashMatch[1])) return hashMatch[1];
+  const patterns = [/#\/room\/([a-z0-9]+)/i, /#room\/([a-z0-9]+)/i];
+  for (const pattern of patterns) {
+    const match = trimmed.match(pattern);
+    if (match && ROOM_ID_PATTERN.test(match[1])) return match[1];
+  }
 
   if (ROOM_ID_PATTERN.test(trimmed)) return trimmed;
   return null;
 }
 
 export function onRouteChange(callback) {
-  const handler = () => callback(getRoomIdFromHash());
+  const handler = () => callback(parseRoute());
   window.addEventListener("hashchange", handler);
   handler();
 }

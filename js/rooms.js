@@ -2,10 +2,16 @@ import {
   doc,
   getDoc,
   setDoc,
+  updateDoc,
+  collection,
+  getDocs,
+  query,
+  orderBy,
   serverTimestamp,
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import { db } from "./firebase.js";
 import { MAX_MEMBERS_PER_ROOM } from "./constants.js";
+import { sha256Hex } from "./crypto-utils.js";
 
 export function generateRoomId() {
   const bytes = new Uint8Array(12);
@@ -15,15 +21,20 @@ export function generateRoomId() {
     .slice(0, 16);
 }
 
-export async function createRoom() {
+export async function createRoom(label, password) {
   const roomId = generateRoomId();
   const existing = await getDoc(doc(db, "rooms", roomId));
-  if (existing.exists()) return createRoom();
+  if (existing.exists()) return createRoom(label, password);
 
+  const passwordHash = await sha256Hex(password);
   await setDoc(doc(db, "rooms", roomId), {
-    createdAt: serverTimestamp(),
+    label: String(label || "").trim() || "চ্যাট রুম",
+    passwordHash,
     memberCount: 0,
-    status: "waiting",
+    maxMembers: MAX_MEMBERS_PER_ROOM,
+    status: "active",
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
     lastActivityAt: serverTimestamp(),
   });
 
@@ -36,6 +47,35 @@ export async function getRoom(roomId) {
   return { id: snap.id, ...snap.data() };
 }
 
+export async function listRooms() {
+  const snap = await getDocs(query(collection(db, "rooms"), orderBy("createdAt", "desc")));
+  return snap.docs.map((d) => ({
+    id: d.id,
+    ...d.data(),
+    createdAt: d.data().createdAt?.toMillis?.() ?? 0,
+  }));
+}
+
+export async function updateRoomPassword(roomId, newPassword) {
+  const passwordHash = await sha256Hex(newPassword);
+  await updateDoc(doc(db, "rooms", roomId), {
+    passwordHash,
+    updatedAt: serverTimestamp(),
+  });
+}
+
+export async function setRoomStatus(roomId, status) {
+  await updateDoc(doc(db, "rooms", roomId), {
+    status,
+    updatedAt: serverTimestamp(),
+  });
+}
+
 export function isRoomFull(room) {
   return (room?.memberCount || 0) >= MAX_MEMBERS_PER_ROOM;
+}
+
+export function buildShareLink(roomId) {
+  const base = `${window.location.origin}${window.location.pathname}`;
+  return `${base}#/room/${roomId}`;
 }

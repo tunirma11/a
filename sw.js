@@ -1,4 +1,4 @@
-const CACHE_NAME = "chat-app-v12";
+const CACHE_NAME = "chat-app-v13";
 
 const ASSETS = [
   "./",
@@ -14,9 +14,13 @@ const ASSETS = [
   "./js/offline.js",
   "./js/router.js",
   "./js/rooms.js",
+  "./js/admin.js",
+  "./js/room-gate.js",
+  "./js/crypto-utils.js",
   "./js/auth.js",
   "./js/chat.js",
   "./js/ui.js",
+  "./js/ui-admin.js",
   "./js/sounds.js",
   "./js/app.js",
   "./icons/icon-192.png",
@@ -50,13 +54,8 @@ self.addEventListener("activate", (event) => {
 
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
-
   if (event.request.method !== "GET") return;
-
-  if (FIREBASE_HOSTS.some((host) => url.hostname.includes(host))) {
-    return;
-  }
-
+  if (FIREBASE_HOSTS.some((host) => url.hostname.includes(host))) return;
   if (url.origin !== self.location.origin) return;
 
   event.respondWith(

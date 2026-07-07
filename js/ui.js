@@ -74,38 +74,15 @@ export function setConnectionBar(status, label) {
 }
 
 export function showView(viewName) {
-  document.getElementById("homeView")?.classList.toggle("d-none", viewName !== "home");
-  document.getElementById("loginView")?.classList.toggle("d-none", viewName !== "join");
-  document.getElementById("chatView")?.classList.toggle("d-none", viewName !== "chat");
-}
-
-export function setAuthTab(mode) {
-  const isLogin = mode === "login";
-  document.getElementById("loginForm")?.classList.toggle("d-none", !isLogin);
-  document.getElementById("registerForm")?.classList.toggle("d-none", isLogin);
-  document.getElementById("loginTabBtn")?.classList.toggle("active", isLogin);
-  document.getElementById("registerTabBtn")?.classList.toggle("active", !isLogin);
-}
-
-export function setLoginLoading(loading) {
-  document.getElementById("loginBtn").disabled = loading;
-  document.querySelector(".login-btn-text")?.classList.toggle("d-none", loading);
-  document.getElementById("loginSpinner")?.classList.toggle("d-none", !loading);
-}
-
-export function setRegisterLoading(loading) {
-  document.getElementById("registerBtn").disabled = loading;
-  document.querySelector(".register-btn-text")?.classList.toggle("d-none", loading);
-  document.getElementById("registerSpinner")?.classList.toggle("d-none", !loading);
-}
-
-export function prefillRegisterForm(userId = "", name = "") {
-  if (userId) document.getElementById("registerUserId").value = userId;
-  if (name) document.getElementById("registerName").value = name;
-}
-
-export function prefillLoginUsername(userId = "") {
-  if (userId) document.getElementById("loginUsername").value = userId;
+  const views = {
+    home: "homeView",
+    admin: "adminView",
+    gate: "gateView",
+    chat: "chatView",
+  };
+  Object.entries(views).forEach(([key, id]) => {
+    document.getElementById(id)?.classList.toggle("d-none", key !== viewName);
+  });
 }
 
 export function updatePartnerHeader(partner, isOnline) {
@@ -117,16 +94,11 @@ export function updatePartnerHeader(partner, isOnline) {
   avatar.innerHTML = `${getInitial(partner.name)}${isOnline ? '<span class="online-dot"></span>' : ""}`;
 }
 
-export function showWaitingForPartner(shareLink = "") {
+export function showWaitingForPartner() {
   document.getElementById("waitingPartner")?.classList.remove("d-none");
   document.getElementById("chatBody")?.classList.add("d-none");
   document.getElementById("partnerName").textContent = "সঙ্গীর অপেক্ষায়";
-  document.getElementById("partnerStatus").textContent = "রেজিস্টার হয়নি";
-
-  const hint = document.getElementById("waitingShareHint");
-  if (hint && shareLink) {
-    hint.textContent = shareLink;
-  }
+  document.getElementById("partnerStatus").textContent = "অপেক্ষায়";
 }
 
 export function showChatReady(partner, isOnline) {
@@ -247,68 +219,4 @@ export function hideInstallBanner() {
 
 export function setSendEnabled(enabled) {
   document.getElementById("sendBtn").disabled = !enabled;
-}
-
-export function setRegisterTabEnabled(enabled) {
-  const tab = document.getElementById("registerTabBtn");
-  const link = document.getElementById("goRegisterLink");
-  if (tab) {
-    tab.disabled = !enabled;
-    tab.classList.toggle("disabled", !enabled);
-  }
-  if (link) link.classList.toggle("d-none", !enabled);
-}
-
-export function setQuickLoginMode(enabled, username = "") {
-  const hint = document.getElementById("quickLoginHint");
-  const usernameInput = document.getElementById("loginUsername");
-  const loginBtnText = document.querySelector(".login-btn-text");
-
-  hint?.classList.toggle("d-none", !enabled);
-
-  if (enabled && username && usernameInput) {
-    usernameInput.value = username;
-  }
-
-  if (loginBtnText) {
-    loginBtnText.textContent = enabled ? "চালিয়ে যান" : "প্রবেশ করুন";
-  }
-}
-
-export function setShareLink(link) {
-  const input = document.getElementById("shareLinkInput");
-  if (input) input.value = link || "";
-}
-
-export function setRoomInfo(roomId, memberCount = 0) {
-  const codeEl = document.getElementById("roomCode");
-  const statusEl = document.getElementById("roomStatus");
-  if (codeEl) codeEl.textContent = roomId || "—";
-  if (statusEl) {
-    statusEl.textContent =
-      memberCount >= 2 ? "রুম পূর্ণ" : `${memberCount}/২ জন যোগ দিয়েছে`;
-  }
-}
-
-export function setHomeLoading(loading) {
-  const btn = document.getElementById("createRoomBtn");
-  const spinner = document.getElementById("createRoomSpinner");
-  if (btn) btn.disabled = loading;
-  spinner?.classList.toggle("d-none", !loading);
-}
-
-export function setJoinLoading(loading) {
-  const btn = document.getElementById("joinRoomBtn");
-  if (btn) btn.disabled = loading;
-}
-
-export function showInvalidRoom(message) {
-  const el = document.getElementById("invalidRoomAlert");
-  if (!el) return;
-  el.textContent = message;
-  el.classList.remove("d-none");
-}
-
-export function hideInvalidRoom() {
-  document.getElementById("invalidRoomAlert")?.classList.add("d-none");
 }

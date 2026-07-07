@@ -10,8 +10,7 @@ import {
   serverTimestamp,
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import { auth, db } from "./firebase.js";
-import { createMember } from "./users.js";
-import { normalizeUserId, validateUserId, QUICK_LOGIN_IDLE_MS } from "./constants.js";
+import { QUICK_LOGIN_IDLE_MS, ONLINE_THRESHOLD_MS } from "./constants.js";
 import {
   getDeviceSession,
   saveDeviceSession,
@@ -21,28 +20,10 @@ import {
 
 let currentUserDoc = null;
 
-export async function canQuickLogin(roomId, username) {
-  const normalized = normalizeUserId(username);
-  if (!normalized || !roomId) return false;
-
-  const session = await getDeviceSession();
-  if (!session?.username || session.username !== normalized) return false;
-  if (!session?.roomId || session.roomId !== roomId) return false;
-
-  const lastActive = session.lastActiveAt || 0;
-  return Date.now() - lastActive < QUICK_LOGIN_IDLE_MS;
-}
-
-export async function getQuickLoginUsername(roomId) {
-  const session = await getDeviceSession();
-  if (!session?.username || session.roomId !== roomId) return null;
-  return (await canQuickLogin(roomId, session.username)) ? session.username : null;
-}
-
 async function attachDeviceSession(uid, roomId, username) {
   const memberSnap = await getDoc(doc(db, "rooms", roomId, "members", username));
   if (!memberSnap.exists()) {
-    throw new Error("এই ইউজারনেম নেই — রেজিস্টার করুন।");
+    throw new Error("সদস্য পাওয়া যায়নি");
   }
 
   const userMeta = memberSnap.data();
@@ -54,6 +35,7 @@ async function attachDeviceSession(uid, roomId, username) {
       roomId,
       username,
       displayName: userMeta.name,
+      role: "chat",
       isOnline: true,
       lastSeen: serverTimestamp(),
     },
@@ -65,16 +47,8 @@ async function attachDeviceSession(uid, roomId, username) {
   return currentUserDoc;
 }
 
-export async function login(roomId, rawUsername, options = {}) {
-  const username = normalizeUserId(rawUsername);
-  const idError = validateUserId(username);
-  if (idError) throw new Error(idError);
-
-  if (!roomId) throw new Error("রুম লিংক সঠিক নয়");
-
-  const quick =
-    options.quick === true ||
-    (options.quick !== false && (await canQuickLogin(roomId, username)));
+export async function enterChatAsMember(roomId, username) {
+  if (!roomId || !username) throw new Error("রুম বা সদস্য সঠিক নয়");
 
   const cred = await signInAnonymously(auth);
   try {
@@ -91,27 +65,11 @@ export async function login(roomId, rawUsername, options = {}) {
   }
 }
 
-export async function register(roomId, rawId, rawName) {
-  const username = normalizeUserId(rawId);
-  const idError = validateUserId(username);
-  if (idError) throw new Error(idError);
-
-  if (!roomId) throw new Error("রুম লিংক সঠিক নয়");
-
-  const cred = await signInAnonymously(auth);
-  try {
-    await createMember(roomId, rawId, rawName);
-    const user = await attachDeviceSession(cred.user.uid, roomId, username);
-    await saveDeviceSession({
-      roomId,
-      username,
-      lastActiveAt: Date.now(),
-    });
-    return user;
-  } catch (err) {
-    await signOut(auth);
-    throw err;
-  }
+export async function canQuickReenter(roomId) {
+  const session = await getDeviceSession();
+  if (!session?.roomId || session.roomId !== roomId) return false;
+  if (!session?.username) return false;
+  return Date.now() - (session.lastActiveAt || 0) < QUICK_LOGIN_IDLE_MS;
 }
 
 export async function ensureAnonymousAuth() {
@@ -167,15 +125,6 @@ export function getCurrentUser() {
   return currentUserDoc;
 }
 
-export async function refreshCurrentUser() {
-  if (!auth.currentUser) return null;
-  const snap = await getDoc(doc(db, "users", auth.currentUser.uid));
-  if (snap.exists()) {
-    currentUserDoc = { uid: auth.currentUser.uid, ...snap.data() };
-  }
-  return currentUserDoc;
-}
-
 export async function sendHeartbeat() {
   if (!auth.currentUser) return;
   await setDoc(
@@ -186,13 +135,13 @@ export async function sendHeartbeat() {
   await touchDeviceSession().catch(() => {});
 }
 
-export function isUserRecentlyActive(lastSeen, thresholdMs = 90 * 1000) {
+export function isUserRecentlyActive(lastSeen, thresholdMs = ONLINE_THRESHOLD_MS) {
   if (!lastSeen) return false;
   const ts = typeof lastSeen === "number" ? lastSeen : lastSeen;
   return Date.now() - ts < thresholdMs;
 }
 
-export function isUsernameOnline(users, username, thresholdMs = 90 * 1000) {
+export function isUsernameOnline(users, username, thresholdMs = ONLINE_THRESHOLD_MS) {
   return users.some(
     (user) =>
       user.username === username &&

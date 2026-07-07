@@ -140,6 +140,33 @@ export function clearMembersCache() {
   activeRoomId = null;
 }
 
-export function getActiveRoomId() {
-  return activeRoomId;
+export async function deleteMember(roomId, username) {
+  const id = normalizeUserId(username);
+  if (!id) throw new Error("অবৈধ ইউজারনেম");
+
+  const roomRef = doc(db, "rooms", roomId);
+  const memberRef = memberDoc(roomId, id);
+
+  await runTransaction(db, async (tx) => {
+    const roomSnap = await tx.get(roomRef);
+    if (!roomSnap.exists()) throw new Error("রুম পাওয়া যায়নি");
+
+    const memberSnap = await tx.get(memberRef);
+    if (!memberSnap.exists()) throw new Error("সদস্য পাওয়া যায়নি");
+
+    const memberCount = roomSnap.data().memberCount || 0;
+    tx.delete(memberRef);
+    tx.update(roomRef, {
+      memberCount: Math.max(0, memberCount - 1),
+      status: "waiting",
+      updatedAt: serverTimestamp(),
+      lastActivityAt: serverTimestamp(),
+    });
+  });
+
+  membersCache = membersCache.filter((m) => m.id !== id);
+}
+
+export async function adminAddMember(roomId, rawId, rawName) {
+  return createMember(roomId, rawId, rawName);
 }
