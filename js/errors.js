@@ -8,7 +8,7 @@ export function formatFirebaseError(err) {
 
   switch (code) {
     case "permission-denied":
-      return "Firestore অনুমতি নেই — Firebase Console থেকে firestore.rules Publish করুন";
+      return "Firestore অনুমতি নেই — Anonymous Auth চালু করুন এবং firestore.rules Publish করুন";
     case "auth/operation-not-allowed":
       return "Anonymous Authentication Firebase-এ enable করুন";
     case "auth/network-request-failed":

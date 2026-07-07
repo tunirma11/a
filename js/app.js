@@ -389,6 +389,8 @@ async function startChatFromGate(password, skipPasswordCheck) {
   setRoomGateLoading(true);
   isEnteringChat = true;
   try {
+    await ensureAnonymousAuth();
+
     if (!skipPasswordCheck) {
       if (!password) throw new Error("রুম পাসওয়ার্ড দিন");
       await verifyRoomPassword(currentRoomId, password);

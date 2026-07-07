@@ -5,15 +5,16 @@ import { QUICK_LOGIN_IDLE_MS, ONLINE_THRESHOLD_MS } from "./constants.js";
 import { getRoom } from "./rooms.js";
 import { fetchMembersOnce, getMembers } from "./users.js";
 import { getRoomSession, saveRoomSession, getDeviceSession } from "./store.js";
-import { isUserRecentlyActive } from "./auth.js";
+import { ensureAnonymousAuth, isUserRecentlyActive } from "./auth.js";
 
 export async function verifyRoomPassword(roomId, password) {
   const room = await getRoom(roomId);
   if (!room) throw new Error("রুম পাওয়া যায়নি");
   if (room.status === "disabled") throw new Error("এই রুম নিষ্ক্রিয় করা হয়েছে");
 
-  const inputHash = await sha256Hex(password);
-  if (inputHash !== room.passwordHash) {
+  const storedHash = String(room.passwordHash || "").trim();
+  const inputHash = await sha256Hex(String(password).trim());
+  if (!storedHash || inputHash !== storedHash) {
     throw new Error("ভুল রুম পাসওয়ার্ড");
   }
 
@@ -44,6 +45,8 @@ async function getOnlineUsernames(roomId) {
 }
 
 export async function claimMemberSlot(roomId) {
+  await ensureAnonymousAuth();
+
   const room = await getRoom(roomId);
   if (!room) throw new Error("রুম পাওয়া যায়নি");
   if (room.status === "disabled") throw new Error("এই রুম নিষ্ক্রিয় করা হয়েছে");
