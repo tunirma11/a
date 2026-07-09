@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" role="img" aria-label="Chat App">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#043d37"/>
+      <stop offset="38%" stop-color="#075e54"/>
+      <stop offset="72%" stop-color="#008069"/>
+      <stop offset="100%" stop-color="#25d366"/>
+    </linearGradient>
+    <linearGradient id="panel" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.16"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0.04"/>
+    </linearGradient>
+    <radialGradient id="orb1" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.22"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="24" stdDeviation="28" flood-color="#021f1c" flood-opacity="0.45"/>
+    </filter>
+  </defs>
+
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <circle cx="1040" cy="110" r="180" fill="url(#orb1)"/>
+  <circle cx="140" cy="560" r="220" fill="url(#orb1)" opacity="0.7"/>
+  <circle cx="980" cy="520" r="90" fill="#ffffff" opacity="0.06"/>
+
+  <rect x="72" y="72" width="1056" height="486" rx="36" fill="url(#panel)" stroke="#ffffff" stroke-opacity="0.12"/>
+
+  <g transform="translate(120 150)">
+    <g filter="url(#shadow)">
+      <rect x="0" y="0" width="180" height="180" rx="42" fill="#ffffff" fill-opacity="0.12"/>
+      <path fill="#ffffff" d="M38 58c0-16.6 13.4-30 30-30h84c16.6 0 30 13.4 30 30v54c0 16.6-13.4 30-30 30H86l-39 29c-4.5 3.4-11 .3-11-5.5V112c-9 0-16-7-16-16V58z"/>
+      <circle cx="74" cy="88" r="10" fill="#25d366"/>
+      <circle cx="110" cy="88" r="10" fill="#008069"/>
+      <circle cx="146" cy="88" r="10" fill="#075e54"/>
+    </g>
+
+    <text x="220" y="72" fill="#ffffff" font-family="Segoe UI, system-ui, sans-serif" font-size="72" font-weight="700">Chat App</text>
+    <text x="220" y="132" fill="#d7f5e8" font-family="Segoe UI, system-ui, sans-serif" font-size="34" font-weight="500">Private 1-on-1 Chat</text>
+    <text x="220" y="188" fill="#ffffff" fill-opacity="0.82" font-family="Segoe UI, system-ui, sans-serif" font-size="26">Secure chat with username and password</text>
+
+    <g transform="translate(220 230)">
+      <rect width="250" height="54" rx="27" fill="#ffffff" fill-opacity="0.14"/>
+      <text x="24" y="35" fill="#ffffff" font-family="Segoe UI, system-ui, sans-serif" font-size="22" font-weight="600">Password protected</text>
+    </g>
+    <g transform="translate(490 230)">
+      <rect width="210" height="54" rx="27" fill="#ffffff" fill-opacity="0.14"/>
+      <text x="24" y="35" fill="#ffffff" font-family="Segoe UI, system-ui, sans-serif" font-size="22" font-weight="600">Install as PWA</text>
+    </g>
+    <g transform="translate(720 230)">
+      <rect width="200" height="54" rx="27" fill="#ffffff" fill-opacity="0.14"/>
+      <text x="24" y="35" fill="#ffffff" font-family="Segoe UI, system-ui, sans-serif" font-size="22" font-weight="600">Two users</text>
+    </g>
+  </g>
+
+  <text x="72" y="592" fill="#ffffff" fill-opacity="0.55" font-family="Segoe UI, system-ui, sans-serif" font-size="22">Desktop | Android | iOS</text>
+</svg>

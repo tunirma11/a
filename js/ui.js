@@ -286,8 +286,28 @@ export function autoResizeTextarea(textarea) {
   textarea.style.height = Math.min(textarea.scrollHeight, 120) + "px";
 }
 
-export function showInstallBanner() {
-  document.getElementById("installBanner").classList.remove("d-none");
+export function showInstallBanner(mode = "native") {
+  const banner = document.getElementById("installBanner");
+  if (!banner) return;
+  banner.classList.toggle("ios-mode", mode === "ios");
+
+  const title = document.getElementById("installBannerTitle");
+  const text = document.getElementById("installBannerText");
+  const installBtn = document.getElementById("installBtn");
+
+  if (mode === "ios") {
+    if (title) title.textContent = "হোম স্ক্রিনে যোগ করুন";
+    if (text) {
+      text.textContent = "Safari-তে শেয়ার বাটন (□↑) → Add to Home Screen";
+    }
+    if (installBtn) installBtn.classList.add("d-none");
+  } else {
+    if (title) title.textContent = "Chat App ইনস্টল করুন";
+    if (text) text.textContent = "ডেস্কটপ, Android বা iOS-এ অ্যাপ হিসেবে ব্যবহার করুন";
+    if (installBtn) installBtn.classList.remove("d-none");
+  }
+
+  banner.classList.remove("d-none");
 }
 
 export function hideInstallBanner() {

@@ -655,12 +655,39 @@ function registerServiceWorker() {
   }
 }
 
+function isIosDevice() {
+  return /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.MSStream;
+}
+
+function isInStandaloneMode() {
+  return window.matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+}
+
+async function maybeShowInstallBanner() {
+  if (isInStandaloneMode()) return;
+  if (await isInstallDismissed()) return;
+
+  if (deferredInstallPrompt) {
+    showInstallBanner("native");
+    return;
+  }
+
+  if (isIosDevice()) {
+    showInstallBanner("ios");
+  }
+}
+
 function initInstallPrompt() {
   window.addEventListener("beforeinstallprompt", async (e) => {
     e.preventDefault();
     deferredInstallPrompt = e;
-    if (!(await isInstallDismissed())) showInstallBanner();
+    await maybeShowInstallBanner();
   });
+
+  if (isIosDevice() && !isInStandaloneMode()) {
+    setTimeout(() => maybeShowInstallBanner(), 1500);
+  }
+
   document.getElementById("installBtn")?.addEventListener("click", async () => {
     if (!deferredInstallPrompt) return;
     deferredInstallPrompt.prompt();

@@ -1,4 +1,4 @@
-const CACHE_NAME = "chat-app-v28";
+const CACHE_NAME = "chat-app-v29";
 
 const ASSETS = [
   "./",
@@ -25,11 +25,15 @@ const ASSETS = [
   "./js/sounds.js",
   "./js/app.js",
   "./icons/icon.svg",
+  "./icons/icon-maskable.svg",
+  "./icons/og-image.svg",
   "./icons/favicon.ico",
   "./icons/favicon-16.png",
   "./icons/favicon-32.png",
+  "./icons/icon-180.png",
   "./icons/icon-192.png",
   "./icons/icon-512.png",
+  "./icons/icon-maskable-512.png",
   "./icons/og-image.jpg",
 ];
 

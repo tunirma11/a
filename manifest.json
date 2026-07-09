@@ -1,24 +1,43 @@
 {
-  "name": "Chat App",
+  "id": "./",
+  "name": "Chat App — ব্যক্তিগত চ্যাট",
   "short_name": "Chat App",
-  "description": "শেয়ারেবল লিংক দিয়ে দুজনের চ্যাট রুম",
-  "start_url": "./index.html",
+  "description": "ইউজারনেম ও পাসওয়ার্ড দিয়ে নিরাপদ ১-অন-১ চ্যাট। Desktop, Android ও iOS-এ ইনস্টল করুন।",
+  "lang": "bn",
+  "dir": "ltr",
+  "start_url": "./",
+  "scope": "./",
   "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#075e54",
+  "display_override": ["standalone", "minimal-ui", "browser"],
   "orientation": "any",
+  "background_color": "#075e54",
+  "theme_color": "#075e54",
+  "categories": ["social", "communication", "utilities"],
+  "prefer_related_applications": false,
   "icons": [
     {
       "src": "icons/icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
     },
     {
       "src": "icons/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "icons/icon-180.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any"
     }
   ]
 }

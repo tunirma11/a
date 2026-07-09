@@ -1,29 +1,31 @@
 #!/usr/bin/env python3
-"""Generate favicon and PWA icons from icons/icon.svg."""
+"""Generate favicon, PWA icons, and OG image from SVG sources."""
 
 import subprocess
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 ICONS = ROOT / "icons"
-SVG = ICONS / "icon.svg"
 
-SIZES = {
-    "favicon-16.png": 16,
-    "favicon-32.png": 32,
-    "icon-192.png": 192,
-    "icon-512.png": 512,
+ICON_SIZES = {
+    "favicon-16.png": (16, "icon.svg"),
+    "favicon-32.png": (32, "icon.svg"),
+    "icon-180.png": (180, "icon.svg"),
+    "icon-192.png": (192, "icon.svg"),
+    "icon-512.png": (512, "icon.svg"),
+    "icon-maskable-512.png": (512, "icon-maskable.svg"),
 }
 
 
-def render_png(name: str, size: int) -> None:
+def render_png(name: str, size: int, source: str) -> None:
+    src = ICONS / source
     out = ICONS / name
     subprocess.run(
         [
             "convert",
             "-background",
             "none",
-            str(SVG),
+            str(src),
             "-resize",
             f"{size}x{size}",
             str(out),
@@ -33,12 +35,35 @@ def render_png(name: str, size: int) -> None:
     print(f"wrote {out} ({size}x{size})")
 
 
-def main() -> None:
-    if not SVG.exists():
-        raise SystemExit(f"Missing source icon: {SVG}")
+def render_og_image() -> None:
+    src = ICONS / "og-image.svg"
+    out = ICONS / "og-image.jpg"
+    subprocess.run(
+        [
+            "convert",
+            "-background",
+            "#075e54",
+            str(src),
+            "-resize",
+            "1200x630!",
+            "-quality",
+            "92",
+            str(out),
+        ],
+        check=True,
+    )
+    print(f"wrote {out} (1200x630)")
 
-    for name, size in SIZES.items():
-        render_png(name, size)
+
+def main() -> None:
+    for name, (size, source) in ICON_SIZES.items():
+        if not (ICONS / source).exists():
+            raise SystemExit(f"Missing source icon: {ICONS / source}")
+        render_png(name, size, source)
+
+    if not (ICONS / "og-image.svg").exists():
+        raise SystemExit("Missing og-image.svg")
+    render_og_image()
 
     ico_path = ICONS / "favicon.ico"
     subprocess.run(

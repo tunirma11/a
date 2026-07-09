@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Chat App maskable">
+  <defs>
+    <linearGradient id="bg" x1="8%" y1="6%" x2="92%" y2="94%">
+      <stop offset="0%" stop-color="#075e54"/>
+      <stop offset="52%" stop-color="#008069"/>
+      <stop offset="100%" stop-color="#25d366"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="512" height="512" fill="url(#bg)"/>
+
+  <g transform="translate(256 256) scale(0.72) translate(-256 -256)">
+    <path fill="#ffffff" d="M142 154c0-26.5 21.5-48 48-48h132c26.5 0 48 21.5 48 48v96c0 26.5-21.5 48-48 48h-120l-62 46c-7.2 5.4-17.6.4-17.6-8.7V298c-14.4 0-26-11.6-26-26V154z"/>
+    <circle cx="214" cy="226" r="17" fill="#008069"/>
+    <circle cx="286" cy="226" r="17" fill="#25d366"/>
+    <circle cx="358" cy="226" r="17" fill="#075e54"/>
+    <path fill="#ffffff" fill-opacity="0.92" d="M388 360c18 0 32-14 32-32s-14-32-32-32-32 14-32 32 14 32 32 32z"/>
+    <rect x="378" y="332" width="20" height="28" rx="10" fill="#075e54"/>
+  </g>
+</svg>

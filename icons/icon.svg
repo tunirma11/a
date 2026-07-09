@@ -1,27 +1,36 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Chat App">
   <defs>
-    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+    <linearGradient id="bg" x1="8%" y1="6%" x2="92%" y2="94%">
       <stop offset="0%" stop-color="#075e54"/>
-      <stop offset="55%" stop-color="#008069"/>
+      <stop offset="52%" stop-color="#008069"/>
       <stop offset="100%" stop-color="#25d366"/>
     </linearGradient>
     <linearGradient id="shine" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.22"/>
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.28"/>
+      <stop offset="45%" stop-color="#ffffff" stop-opacity="0.06"/>
       <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
     </linearGradient>
+    <radialGradient id="glow" cx="28%" cy="18%" r="55%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
     <filter id="soft" x="-20%" y="-20%" width="140%" height="140%">
-      <feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="#043d37" flood-opacity="0.28"/>
+      <feDropShadow dx="0" dy="14" stdDeviation="16" flood-color="#043d37" flood-opacity="0.32"/>
     </filter>
   </defs>
 
-  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
-  <rect width="512" height="512" rx="112" fill="url(#shine)"/>
+  <rect width="512" height="512" rx="116" fill="url(#bg)"/>
+  <rect width="512" height="512" rx="116" fill="url(#glow)"/>
+  <rect width="512" height="512" rx="116" fill="url(#shine)"/>
 
   <g filter="url(#soft)">
-    <path fill="#ffffff" d="M148 156c0-24.3 19.7-44 44-44h128c24.3 0 44 19.7 44 44v92c0 24.3-19.7 44-44 44H236l-58 44c-6.8 5.1-16.6.4-16.6-8.2V292c-13.2 0-24-10.8-24-24V156z"/>
+    <path fill="#ffffff" d="M142 154c0-26.5 21.5-48 48-48h132c26.5 0 48 21.5 48 48v96c0 26.5-21.5 48-48 48h-120l-62 46c-7.2 5.4-17.6.4-17.6-8.7V298c-14.4 0-26-11.6-26-26V154z"/>
   </g>
 
-  <circle cx="220" cy="222" r="18" fill="#008069"/>
-  <circle cx="292" cy="222" r="18" fill="#25d366"/>
-  <circle cx="364" cy="222" r="18" fill="#075e54"/>
+  <circle cx="214" cy="226" r="17" fill="#008069"/>
+  <circle cx="286" cy="226" r="17" fill="#25d366"/>
+  <circle cx="358" cy="226" r="17" fill="#075e54"/>
+
+  <path fill="#ffffff" fill-opacity="0.92" d="M388 360c18 0 32-14 32-32s-14-32-32-32-32 14-32 32 14 32 32 32z"/>
+  <rect x="378" y="332" width="20" height="28" rx="10" fill="#075e54"/>
 </svg>
