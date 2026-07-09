@@ -72,7 +72,6 @@ export function renderAdminRoomDetail(room, members) {
       <div class="admin-member-row">
         <div class="admin-member-info">
           <div class="fw-semibold">${escapeHtml(m.name)}</div>
-          <div class="small text-muted">${escapeHtml(m.id)}</div>
         </div>
         <div class="admin-member-actions">
           <form class="admin-member-password-form" data-username="${escapeHtml(m.id)}">

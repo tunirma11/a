@@ -13,7 +13,6 @@ import {
 import { db } from "./firebase.js";
 import {
   MAX_MEMBERS_PER_ROOM,
-  validateUserId,
   validateDisplayName,
   normalizeUserId,
 } from "./constants.js";
@@ -90,11 +89,21 @@ export function listenToMembers(roomId, callback) {
   );
 }
 
-export async function createMember(roomId, rawId, rawName, password) {
-  const id = normalizeUserId(rawId);
-  const idError = validateUserId(id);
-  if (idError) throw new Error(idError);
+const MEMBER_SLOTS = ["m1", "m2"];
 
+async function assertUniquePassword(tx, roomId, passwordHash, excludeId = null) {
+  for (const slot of MEMBER_SLOTS) {
+    if (excludeId && slot === excludeId) continue;
+    const snap = await tx.get(memberDoc(roomId, slot));
+    if (!snap.exists()) continue;
+    const existing = String(snap.data().passwordHash || "").trim();
+    if (existing && existing === passwordHash) {
+      throw new Error("এই পাসওয়ার্ড অন্য সদস্যের আছে — আলাদা পাসওয়ার্ড দিন");
+    }
+  }
+}
+
+export async function createMember(roomId, rawName, password) {
   const name = String(rawName || "").trim();
   const nameError = validateDisplayName(name);
   if (nameError) throw new Error(nameError);
@@ -103,28 +112,31 @@ export async function createMember(roomId, rawId, rawName, password) {
   if (!plainPassword) throw new Error("সদস্যের পাসওয়ার্ড দিন");
 
   const passwordHash = await sha256Hex(plainPassword);
-
   const roomRef = doc(db, "rooms", roomId);
-  const newMemberRef = memberDoc(roomId, id);
+  let newId = null;
 
   await runTransaction(db, async (tx) => {
     const roomSnap = await tx.get(roomRef);
-    if (!roomSnap.exists()) {
-      throw new Error("রুম পাওয়া যায়নি");
-    }
+    if (!roomSnap.exists()) throw new Error("রুম পাওয়া যায়নি");
 
     const memberCount = roomSnap.data().memberCount || 0;
     if (memberCount >= MAX_MEMBERS_PER_ROOM) {
       throw new Error("রুম পূর্ণ — আর কেউ যোগ দিতে পারবে না");
     }
 
-    const existing = await tx.get(newMemberRef);
-    if (existing.exists()) {
-      throw new Error("এই ইউজারনেম ইতিমধ্যে আছে — প্রবেশ করুন");
+    for (const slot of MEMBER_SLOTS) {
+      const snap = await tx.get(memberDoc(roomId, slot));
+      if (!snap.exists()) {
+        newId = slot;
+        break;
+      }
     }
+    if (!newId) throw new Error("রুম পূর্ণ — আর কেউ যোগ দিতে পারবে না");
 
-    tx.set(newMemberRef, {
-      id,
+    await assertUniquePassword(tx, roomId, passwordHash);
+
+    tx.set(memberDoc(roomId, newId), {
+      id: newId,
       name,
       passwordHash,
       joinedAt: serverTimestamp(),
@@ -135,11 +147,12 @@ export async function createMember(roomId, rawId, rawName, password) {
       memberCount: newCount,
       status: newCount >= MAX_MEMBERS_PER_ROOM ? "active" : "waiting",
       lastActivityAt: serverTimestamp(),
-      ...(newCount === 1 ? { createdBy: id } : {}),
+      ...(newCount === 1 ? { createdBy: newId } : {}),
     });
   });
 
-  membersCache = [...membersCache, { id, name }];
+  membersCache = [...membersCache, { id: newId, name }];
+  return newId;
 }
 
 export function clearMembersCache() {
@@ -186,9 +199,15 @@ export async function updateMemberPassword(roomId, username, newPassword) {
   if (!memberSnap.exists()) throw new Error("সদস্য পাওয়া যায়নি");
 
   const passwordHash = await sha256Hex(plainPassword);
-  await setDoc(memberRef, { passwordHash }, { merge: true });
+
+  await runTransaction(db, async (tx) => {
+    const memberSnap = await tx.get(memberRef);
+    if (!memberSnap.exists()) throw new Error("সদস্য পাওয়া যায়নি");
+    await assertUniquePassword(tx, roomId, passwordHash, id);
+    tx.update(memberRef, { passwordHash });
+  });
 }
 
-export async function adminAddMember(roomId, rawId, rawName, password) {
-  return createMember(roomId, rawId, rawName, password);
+export async function adminAddMember(roomId, rawName, password) {
+  return createMember(roomId, rawName, password);
 }

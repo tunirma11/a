@@ -297,7 +297,6 @@ async function handleAdminCreateRoom(e) {
 async function handleAdminAddMember(e) {
   e.preventDefault();
   const roomId = getSelectedAdminRoomId();
-  const rawId = document.getElementById("adminMemberId")?.value || "";
   const name = document.getElementById("adminMemberName")?.value || "";
   const password = document.getElementById("adminMemberPassword")?.value || "";
   if (!roomId) return;
@@ -310,8 +309,7 @@ async function handleAdminAddMember(e) {
 
   try {
     await ensureAnonymousAuth();
-    await adminAddMember(roomId, rawId, name, password);
-    document.getElementById("adminMemberId").value = "";
+    await adminAddMember(roomId, name, password);
     document.getElementById("adminMemberName").value = "";
     document.getElementById("adminMemberPassword").value = "";
     await refreshAdminRooms();
