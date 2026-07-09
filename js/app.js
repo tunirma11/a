@@ -29,7 +29,7 @@ import {
   deleteRoom,
   isRoomFull,
 } from "./rooms.js";
-import { onRouteChange, navigateToAdmin, navigateToHome } from "./router.js";
+import { onRouteChange, navigateToAdmin, navigateToHome, parseRoute } from "./router.js";
 import { getPendingMessages, clearRoomSession } from "./store.js";
 import {
   enableOfflinePersistence,
@@ -140,6 +140,17 @@ let ackTimer = null;
 let renderUiRaf = null;
 let lastPartnerStatusText = "";
 let messagesListenerRoomId = null;
+let currentRouteView = parseRoute().view;
+
+function pauseChatUi() {
+  if (!sessionStarted) return;
+  stopChatSession();
+  sessionStarted = false;
+}
+
+function isAdminRoute() {
+  return currentRouteView === "admin";
+}
 
 const CHAT_AUTH_KEY = "chat-authenticated";
 
@@ -218,8 +229,25 @@ async function init() {
   document.getElementById("clearChatBtn")?.addEventListener("click", handleClearChat);
   document.addEventListener("click", () => toggleRoomMenu(false));
 
+  onRouteChange(async (route) => {
+    currentRouteView = route.view;
+    if (route.view === "home") {
+      await bootstrapChatLogin(route.prefillRoomId);
+      return;
+    }
+    if (route.view === "admin") {
+      await bootstrapAdmin();
+    }
+  });
+
   onAuthChange(async (user) => {
     if (isEnteringChat) return;
+
+    if (isAdminRoute()) {
+      pauseChatUi();
+      return;
+    }
+
     if (!isChatAuthenticated()) {
       if (user) await logout();
       return;
@@ -245,20 +273,11 @@ async function init() {
     }
   });
 
-  onRouteChange(async (route) => {
-    if (route.view === "home") {
-      await bootstrapChatLogin(route.prefillRoomId);
-      return;
-    }
-    if (route.view === "admin") {
-      await bootstrapAdmin();
-    }
-  });
-
   initDeviceLifecycle();
 }
 
 async function bootstrapAdmin() {
+  pauseChatUi();
   showView("admin");
   if (!(await isAdminLoggedIn())) {
     showAdminLogin(true);
@@ -519,6 +538,7 @@ async function startChatFromLogin(roomId, password) {
 }
 
 function enterChat(user) {
+  if (isAdminRoute()) return;
   showView("chat");
   if (!sessionStarted) {
     startChatSession();
