@@ -7,6 +7,58 @@ import { fetchMembersOnce, getMembers } from "./users.js";
 import { getRoomSession, saveRoomSession, getDeviceSession } from "./store.js";
 import { ensureAnonymousAuth, isUserRecentlyActive } from "./auth.js";
 
+export async function findMemberByPassword(roomId, password) {
+  const room = await getRoom(roomId);
+  if (!room) throw new Error("রুম পাওয়া যায়নি");
+  if (room.status === "disabled") throw new Error("এই রুম নিষ্ক্রিয় করা হয়েছে");
+
+  await fetchMembersOnce(roomId);
+  const members = getMembers();
+  if (!members.length) {
+    throw new Error("এই রুমে এখনো সদস্য যোগ করা হয়নি");
+  }
+
+  const inputHash = await sha256Hex(String(password).trim());
+  const sharedHash = String(room.passwordHash || "").trim();
+
+  const matches = [];
+  for (const member of members) {
+    let storedHash = String(member.passwordHash || "").trim();
+    if (!storedHash && sharedHash) storedHash = sharedHash;
+    if (storedHash && inputHash === storedHash) {
+      matches.push(member);
+    }
+  }
+
+  if (matches.length === 0) throw new Error("ভুল পাসওয়ার্ড");
+  if (matches.length > 1) {
+    throw new Error("পাসওয়ার্ড অস্পষ্ট — প্রতিটি সদস্যের আলাদা পাসওয়ার্ড রাখুন");
+  }
+  return matches[0];
+}
+
+export async function verifyRoomLogin(roomId, password) {
+  const member = await findMemberByPassword(roomId, password);
+  const username = member.id;
+
+  await ensureAnonymousAuth();
+
+  const deviceSession = await getDeviceSession();
+  if (!(deviceSession?.roomId === roomId && deviceSession?.username === username)) {
+    const onlineUsernames = await getOnlineUsernames(roomId);
+    if (onlineUsernames.has(username)) {
+      throw new Error("এই অ্যাকাউন্ট ইতিমধ্যে অনলাইন — আগে লগআউট করুন বা অপেক্ষা করুন");
+    }
+  }
+
+  await saveRoomSession({
+    roomId,
+    username,
+    passwordVerifiedAt: Date.now(),
+  });
+  return member;
+}
+
 export async function verifyMemberPassword(roomId, username, password) {
   const room = await getRoom(roomId);
   if (!room) throw new Error("রুম পাওয়া যায়নি");
@@ -18,7 +70,6 @@ export async function verifyMemberPassword(roomId, username, password) {
   const member = memberSnap.data();
   let storedHash = String(member.passwordHash || "").trim();
 
-  // পুরনো রুম: শেয়ারড রুম পাসওয়ার্ড থাকলে ফলব্যাক
   if (!storedHash) {
     storedHash = String(room.passwordHash || "").trim();
   }
@@ -66,7 +117,7 @@ export async function resolveRoomMember(roomId, rawUsername) {
   await fetchMembersOnce(roomId);
   const member = getMembers().find((m) => m.id === username);
   if (!member) {
-    throw new Error("এই ইউজারনেম এই রুমে নেই — অ্যাডমিন যোগ করেছেন কিনা দেখুন");
+    throw new Error("এই সদস্য এই রুমে নেই");
   }
 
   const deviceSession = await getDeviceSession();
@@ -76,13 +127,8 @@ export async function resolveRoomMember(roomId, rawUsername) {
 
   const onlineUsernames = await getOnlineUsernames(roomId);
   if (onlineUsernames.has(username)) {
-    throw new Error("এই ইউজারনেম ইতিমধ্যে অনলাইন — আগে লগআউট করুন বা অপেক্ষা করুন");
+    throw new Error("এই অ্যাকাউন্ট ইতিমধ্যে অনলাইন — আগে লগআউট করুন বা অপেক্ষা করুন");
   }
 
   return username;
-}
-
-export async function getRoomMemberUsernames(roomId) {
-  await fetchMembersOnce(roomId);
-  return getMembers().map((m) => m.id);
 }

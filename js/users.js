@@ -110,7 +110,7 @@ export async function createMember(roomId, rawId, rawName, password) {
   await runTransaction(db, async (tx) => {
     const roomSnap = await tx.get(roomRef);
     if (!roomSnap.exists()) {
-      throw new Error("রুম পাওয়া যায়নি — লিংক যাচাই করুন");
+      throw new Error("রুম পাওয়া যায়নি");
     }
 
     const memberCount = roomSnap.data().memberCount || 0;

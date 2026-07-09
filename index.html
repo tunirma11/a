@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <meta name="description" content="চ্যাট অ্যাপ — অ্যাডমিন প্যানেল ও পাসওয়ার্ড-সুরক্ষিত চ্যাট রুম।">
+  <meta name="description" content="চ্যাট অ্যাপ — ইউজারনেম ও পাসওয়ার্ড দিয়ে ১-অন-১ চ্যাট।">
   <meta name="theme-color" content="#075e54">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -37,23 +37,36 @@
     <span id="connectionText">অনলাইন</span>
   </div>
 
-  <!-- Home: Admin password -->
+  <!-- Home: Chat login (username = room, password = user identity) -->
   <div id="homeView" class="view login-view">
     <div class="login-card card shadow-sm">
       <div class="card-body p-4">
         <div class="text-center mb-4">
-          <div class="app-logo mx-auto mb-3">🔐</div>
+          <div class="app-logo mx-auto mb-3">💬</div>
           <h1 class="h4 mb-1">Chat App</h1>
-          <p class="text-muted small mb-0">অ্যাডমিন প্যানেল — পাসওয়ার্ড দিন</p>
+          <p class="text-muted small mb-0">ইউজারনেম (রুম) ও পাসওয়ার্ড দিয়ে প্রবেশ করুন</p>
         </div>
-        <form id="adminLoginForm" novalidate>
-          <div class="form-floating mb-4">
-            <input type="password" class="form-control" id="adminPasswordInput" placeholder="পাসওয়ার্ড" autocomplete="current-password" required>
-            <label for="adminPasswordInput">অ্যাডমিন পাসওয়ার্ড</label>
+
+        <div id="chatLoginError" class="alert alert-danger small py-2 d-none" role="alert"></div>
+        <div id="quickChatHint" class="quick-login-hint d-none mb-3">
+          <span class="quick-login-dot"></span>
+          <span>এই ডিভাইসে সক্রিয় — শুধু ইউজারনেম দিয়ে চালিয়ে যান</span>
+        </div>
+
+        <form id="chatLoginForm" novalidate>
+          <div class="form-floating mb-3">
+            <input type="text" class="form-control" id="chatRoomInput" placeholder="ইউজারনেম" autocomplete="username" autocapitalize="none" spellcheck="false" required>
+            <label for="chatRoomInput">ইউজারনেম (রুম)</label>
+            <div class="form-text">প্রতিটি ইউজারনেম একটি আলাদা চ্যাট রুম</div>
           </div>
-          <button type="submit" class="btn btn-primary w-100 btn-lg" id="adminLoginBtn">
-            <span>প্রবেশ করুন</span>
-            <span class="spinner-border spinner-border-sm d-none ms-2" id="adminLoginSpinner" role="status"></span>
+          <div class="form-floating mb-4" id="chatPasswordWrap">
+            <input type="password" class="form-control" id="chatPasswordInput" placeholder="পাসওয়ার্ড" autocomplete="current-password" required>
+            <label for="chatPasswordInput">পাসওয়ার্ড</label>
+            <div class="form-text">আপনার পাসওয়ার্ড আপনাকে চিনবে</div>
+          </div>
+          <button type="submit" class="btn btn-primary w-100 btn-lg" id="chatLoginBtn">
+            <span class="chat-login-btn-text">চ্যাট শুরু করুন</span>
+            <span class="spinner-border spinner-border-sm d-none ms-2" id="chatLoginSpinner" role="status"></span>
           </button>
         </form>
       </div>
@@ -62,7 +75,29 @@
 
   <!-- Admin Panel -->
   <div id="adminView" class="view admin-view d-none">
-    <div class="admin-shell">
+    <div id="adminLoginSection" class="admin-login-wrap login-view">
+      <div class="login-card card shadow-sm">
+        <div class="card-body p-4">
+          <div class="text-center mb-4">
+            <div class="app-logo mx-auto mb-3">🔐</div>
+            <h1 class="h4 mb-1">অ্যাডমিন</h1>
+            <p class="text-muted small mb-0">অ্যাডমিন পাসওয়ার্ড দিন</p>
+          </div>
+          <form id="adminLoginForm" novalidate>
+            <div class="form-floating mb-4">
+              <input type="password" class="form-control" id="adminPasswordInput" placeholder="পাসওয়ার্ড" autocomplete="current-password" required>
+              <label for="adminPasswordInput">অ্যাডমিন পাসওয়ার্ড</label>
+            </div>
+            <button type="submit" class="btn btn-primary w-100 btn-lg" id="adminLoginBtn">
+              <span>প্রবেশ করুন</span>
+              <span class="spinner-border spinner-border-sm d-none ms-2" id="adminLoginSpinner" role="status"></span>
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <div id="adminPanelSection" class="admin-shell d-none">
       <header class="admin-topbar">
         <h1 class="h5 mb-0">অ্যাডমিন প্যানেল</h1>
         <button type="button" class="btn btn-sm btn-outline-secondary" id="adminLogoutBtn">লগআউট</button>
@@ -73,8 +108,8 @@
           <h2 class="h6">নতুন রুম তৈরি</h2>
           <form id="adminCreateRoomForm" class="row g-2">
             <div class="col-12">
-              <input type="text" class="form-control" id="newRoomCode" placeholder="রুম কোড (লিংকে থাকবে)" required autocapitalize="none" spellcheck="false">
-              <div class="form-text">সহজ মনে রাখার কোড: ali-sara, chat01, বা 4829</div>
+              <input type="text" class="form-control" id="newRoomCode" placeholder="ইউজারনেম (রুম কোড)" required autocapitalize="none" spellcheck="false">
+              <div class="form-text">লগইন ইউজারনেম হিসেবে ব্যবহার হবে — যেমন: abc, ali-sara, 4829</div>
             </div>
             <div class="col-12">
               <input type="text" class="form-control" id="newRoomLabel" placeholder="রুমের নাম (যেমন: Ali ও Sara)" required>
@@ -91,18 +126,20 @@
         </section>
 
         <section id="adminRoomDetail" class="admin-section d-none">
-          <h2 class="h6" id="adminRoomTitle">রুম বিস্তারিত</h2>
-          <p class="small text-muted mb-2">কোড: <code id="adminRoomCode"></code> · <span id="adminRoomStatusText"></span></p>
-
-          <label class="form-label small text-muted">শেয়ার লিংক</label>
-          <div class="input-group mb-3">
-            <input type="text" class="form-control form-control-sm" id="adminRoomLink" readonly>
-            <button type="button" class="btn btn-outline-secondary btn-sm" id="adminCopyLinkBtn">কপি</button>
+          <div class="d-flex justify-content-between align-items-start gap-2 mb-3">
+            <div>
+              <h2 class="h6 mb-1" id="adminRoomTitle">রুম বিস্তারিত</h2>
+              <p class="small text-muted mb-0">লগইন ইউজারনেম: <code id="adminRoomCode"></code> · <span id="adminRoomStatusText"></span></p>
+              <p class="small text-muted mb-0">সদস্যরা এই ইউজারনেম ও নিজের পাসওয়ার্ড দিয়ে লগইন করবে</p>
+            </div>
+            <div class="d-flex flex-column gap-1 flex-shrink-0">
+              <button type="button" class="btn btn-sm btn-outline-danger" id="adminDeleteRoomBtn">রুম মুছুন</button>
+              <button type="button" class="btn btn-sm btn-outline-secondary" id="adminToggleRoomBtn">রুম নিষ্ক্রিয় করুন</button>
+            </div>
           </div>
 
           <div class="d-flex justify-content-between align-items-center mb-2">
             <h3 class="h6 mb-0">সদস্য</h3>
-            <button type="button" class="btn btn-sm btn-outline-danger" id="adminToggleRoomBtn">রুম নিষ্ক্রিয় করুন</button>
           </div>
           <div id="adminMemberList" class="admin-member-list mb-3"></div>
 
@@ -122,41 +159,6 @@
             </div>
           </form>
         </section>
-      </div>
-    </div>
-  </div>
-
-  <!-- Room Gate: chat user password -->
-  <div id="gateView" class="view login-view d-none">
-    <div class="login-card card shadow-sm">
-      <div class="card-body p-4">
-        <div class="text-center mb-4">
-          <div class="app-logo mx-auto mb-3">💬</div>
-          <h1 class="h4 mb-1">চ্যাট রুম</h1>
-          <p class="text-muted small mb-0">ইউজারনেম ও আপনার পাসওয়ার্ড দিয়ে প্রবেশ করুন</p>
-        </div>
-
-        <div id="roomGateError" class="alert alert-danger small py-2 d-none" role="alert"></div>
-        <div id="quickRoomHint" class="quick-login-hint d-none mb-3">
-          <span class="quick-login-dot"></span>
-          <span>এই ডিভাইসে সক্রিয় — শুধু ইউজারনেম দিয়ে চালিয়ে যান</span>
-        </div>
-
-        <form id="roomGateForm" novalidate>
-          <div class="form-floating mb-3">
-            <input type="text" class="form-control" id="roomGateUsername" placeholder="ইউজারনেম" autocomplete="username" autocapitalize="none" spellcheck="false" required>
-            <label for="roomGateUsername">ইউজারনেম</label>
-            <div class="form-text" id="roomMemberHint">অ্যাডমিন যে ইউজারনেম দিয়েছেন সেটাই লিখুন</div>
-          </div>
-          <div class="form-floating mb-4" id="roomPasswordWrap">
-            <input type="password" class="form-control" id="roomPasswordInput" placeholder="আপনার পাসওয়ার্ড" autocomplete="current-password" required>
-            <label for="roomPasswordInput">আপনার পাসওয়ার্ড</label>
-          </div>
-          <button type="submit" class="btn btn-primary w-100 btn-lg" id="roomGateBtn">
-            <span class="room-gate-btn-text">চ্যাট শুরু করুন</span>
-            <span class="spinner-border spinner-border-sm d-none ms-2" id="roomGateSpinner" role="status"></span>
-          </button>
-        </form>
       </div>
     </div>
   </div>

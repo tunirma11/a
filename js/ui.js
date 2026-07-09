@@ -77,7 +77,6 @@ export function showView(viewName) {
   const views = {
     home: "homeView",
     admin: "adminView",
-    gate: "gateView",
     chat: "chatView",
   };
   Object.entries(views).forEach(([key, id]) => {

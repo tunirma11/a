@@ -27,7 +27,7 @@ function migrateLegacyHashIfNeeded() {
   if (roomMatch) {
     const id = roomMatch[1].toLowerCase();
     if (ROOM_ID_PATTERN.test(id)) {
-      history.replaceState(null, "", `${getAppBasePath()}${id}`);
+      history.replaceState(null, "", getAppBasePath());
       return;
     }
   }
@@ -69,20 +69,20 @@ export function parseRoute() {
   if (segment === "admin") {
     return { view: "admin" };
   }
+
+  // পুরনো রুম-লিংক (/roomId) — রুটে রিডাইরেক্ট, রুম কোড প্রিফিল
   if (segment && !RESERVED_SEGMENTS.has(segment) && ROOM_ID_PATTERN.test(segment)) {
-    return { view: "room", roomId: segment };
+    history.replaceState(null, "", getAppBasePath());
+    return { view: "home", prefillRoomId: segment };
   }
+
   return { view: "home" };
 }
 
 /** @deprecated use parseRoute — kept for compatibility */
 export function getRoomIdFromHash() {
   const route = parseRoute();
-  return route.view === "room" ? route.roomId : null;
-}
-
-export function navigateToRoom(roomId) {
-  navigateTo(String(roomId || "").toLowerCase());
+  return route.prefillRoomId || null;
 }
 
 export function navigateToAdmin() {
@@ -93,40 +93,13 @@ export function navigateToHome() {
   navigateTo(getAppBasePath());
 }
 
-export function buildShareLink(roomId) {
-  const id = String(roomId || "").toLowerCase();
-  return `${window.location.origin}${getAppBasePath()}${id}`;
+export function buildAppLink() {
+  return `${window.location.origin}${getAppBasePath()}`;
 }
 
-export function parseRoomIdFromInput(input) {
-  const trimmed = String(input || "").trim();
-  if (!trimmed) return null;
-
-  const hashPatterns = [/#\/?room\/([a-z0-9_-]+)/i];
-  for (const pattern of hashPatterns) {
-    const match = trimmed.match(pattern);
-    if (match) {
-      const id = match[1].toLowerCase();
-      if (ROOM_ID_PATTERN.test(id)) return id;
-    }
-  }
-
-  try {
-    const url = trimmed.startsWith("http")
-      ? new URL(trimmed)
-      : new URL(trimmed, window.location.origin);
-    const segments = url.pathname.split("/").filter(Boolean);
-    const last = segments[segments.length - 1]?.toLowerCase();
-    if (last && !RESERVED_SEGMENTS.has(last) && last !== "admin" && ROOM_ID_PATTERN.test(last)) {
-      return last;
-    }
-  } catch {
-    /* not a URL */
-  }
-
-  const code = trimmed.toLowerCase();
-  if (ROOM_ID_PATTERN.test(code)) return code;
-  return null;
+/** @deprecated use buildAppLink */
+export function buildShareLink() {
+  return buildAppLink();
 }
 
 export function onRouteChange(callback) {

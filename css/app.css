@@ -817,6 +817,10 @@ html, body {
   background: #f0f2f5;
 }
 
+.admin-login-wrap {
+  min-height: 100dvh;
+}
+
 .admin-shell {
   max-width: 720px;
   margin: 0 auto;

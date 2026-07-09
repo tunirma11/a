@@ -22,16 +22,16 @@ import {
 } from "./auth.js";
 import { loginAdmin, logoutAdmin, isAdminLoggedIn, touchAdminSession } from "./admin.js";
 import {
-  verifyMemberPassword,
+  verifyRoomLogin,
   isMemberPasswordVerified,
   resolveRoomMember,
-  getRoomMemberUsernames,
 } from "./room-gate.js";
 import {
   createRoom,
   getRoom,
   listRooms,
   setRoomStatus,
+  deleteRoom,
   isRoomFull,
 } from "./rooms.js";
 import { onRouteChange, navigateToAdmin, navigateToHome } from "./router.js";
@@ -64,14 +64,14 @@ import {
   hideAdminRoomDetail,
   setAdminLoading,
   setAdminCreateLoading,
-  setRoomGateLoading,
-  showRoomGateError,
-  hideRoomGateError,
-  showQuickRoomHint,
+  setChatLoginLoading,
+  showChatLoginError,
+  hideChatLoginError,
+  showQuickChatHint,
   getSelectedAdminRoomId,
   setSelectedAdminRoomId,
-  setRoomGateQuickMode,
-  setRoomMemberHint,
+  setChatLoginQuickMode,
+  showAdminLogin,
 } from "./ui-admin.js";
 import {
   bindSoundUnlock,
@@ -89,7 +89,7 @@ import {
   playSync,
   playSentConfirm,
 } from "./sounds.js";
-import { normalizeUserId } from "./constants.js";
+import { normalizeRoomCode, validateRoomCode } from "./constants.js";
 import { formatFirebaseError } from "./errors.js";
 
 let currentRoomId = null;
@@ -129,11 +129,11 @@ async function init() {
   document.getElementById("adminLogoutBtn")?.addEventListener("click", handleAdminLogout);
   document.getElementById("adminCreateRoomForm")?.addEventListener("submit", handleAdminCreateRoom);
   document.getElementById("adminAddMemberForm")?.addEventListener("submit", handleAdminAddMember);
-  document.getElementById("adminCopyLinkBtn")?.addEventListener("click", handleAdminCopyLink);
   document.getElementById("adminToggleRoomBtn")?.addEventListener("click", handleAdminToggleRoom);
+  document.getElementById("adminDeleteRoomBtn")?.addEventListener("click", handleAdminDeleteRoom);
   document.getElementById("adminMemberList")?.addEventListener("click", handleAdminMemberListClick);
   document.getElementById("adminMemberList")?.addEventListener("submit", handleAdminMemberPasswordSubmit);
-  document.getElementById("roomGateForm")?.addEventListener("submit", handleRoomGate);
+  document.getElementById("chatLoginForm")?.addEventListener("submit", handleChatLogin);
   document.getElementById("logoutBtn")?.addEventListener("click", handleLogout);
   document.getElementById("soundToggleBtn")?.addEventListener("click", handleSoundToggle);
   document.getElementById("sendBtn")?.addEventListener("click", handleSend);
@@ -153,17 +153,11 @@ async function init() {
 
   onRouteChange(async (route) => {
     if (route.view === "home") {
-      currentRoomId = null;
-      clearMembersCache();
-      showView("home");
+      await bootstrapChatLogin(route.prefillRoomId);
       return;
     }
     if (route.view === "admin") {
       await bootstrapAdmin();
-      return;
-    }
-    if (route.view === "room") {
-      await bootstrapRoomGate(route.roomId);
     }
   });
 
@@ -171,14 +165,14 @@ async function init() {
 }
 
 async function bootstrapAdmin() {
+  showView("admin");
   if (!(await isAdminLoggedIn())) {
-    navigateToHome();
-    showToast("অ্যাডমিন পাসওয়ার্ড দিন");
+    showAdminLogin(true);
     return;
   }
+  showAdminLogin(false);
   await touchAdminSession();
   await ensureAnonymousAuth();
-  showView("admin");
   await refreshAdminRooms();
 }
 
@@ -207,53 +201,38 @@ async function loadAdminRoomDetail(roomId) {
   renderAdminRoomDetail(room, getMembers());
 }
 
-async function bootstrapRoomGate(roomId) {
-  currentRoomId = roomId;
+async function bootstrapChatLogin(prefillRoomId) {
+  currentRoomId = null;
   clearMembersCache();
-  hideRoomGateError();
+  hideChatLoginError();
+  showView("home");
 
-  const room = await getRoom(roomId);
-  if (!room) {
-    showView("gate");
-    showRoomGateError("রুম পাওয়া যায়নি — লিংক যাচাই করুন");
-    return;
-  }
-  if (room.status === "disabled") {
-    showView("gate");
-    showRoomGateError("এই রুম নিষ্ক্রিয় করা হয়েছে");
-    return;
+  const roomInput = document.getElementById("chatRoomInput");
+  if (prefillRoomId && roomInput) {
+    roomInput.value = prefillRoomId;
   }
 
-  showView("gate");
   const deviceSession = await getDeviceSession();
-  const quickUsername = deviceSession?.username || "";
-  const verified = quickUsername
-    ? await isMemberPasswordVerified(roomId, quickUsername)
-    : false;
-  const quick = (await canQuickReenter(roomId)) && verified;
+  const quickRoomId = deviceSession?.roomId || "";
+  const verified =
+    quickRoomId && deviceSession?.username
+      ? await isMemberPasswordVerified(quickRoomId, deviceSession.username)
+      : false;
+  const quick = quickRoomId ? (await canQuickReenter(quickRoomId)) && verified : false;
 
-  try {
-    const usernames = await getRoomMemberUsernames(roomId);
-    if (usernames.length) {
-      setRoomMemberHint(`এই রুমের সদস্য: ${usernames.join(", ")}`);
-    } else {
-      setRoomMemberHint("অ্যাডমিন এখনো সদস্য যোগ করেননি");
-    }
-  } catch {
-    setRoomMemberHint("");
-  }
-
-  setRoomGateQuickMode(quick, quick ? deviceSession?.username : "");
-  showQuickRoomHint(quick);
+  setChatLoginQuickMode(quick, quick ? quickRoomId : "");
+  showQuickChatHint(quick);
 
   const user = getCurrentUser();
-  if (user?.roomId === roomId) {
+  if (user?.roomId) {
+    currentRoomId = user.roomId;
+    await fetchMembersOnce(user.roomId);
     enterChat(user);
     return;
   }
 
-  if (quick && deviceSession?.username) {
-    await startChatFromGate(null, deviceSession.username, true);
+  if (quick && deviceSession?.roomId) {
+    await startChatFromLogin(deviceSession.roomId, null, true);
   }
 }
 
@@ -283,7 +262,7 @@ async function handleAdminLogin(e) {
 async function handleAdminLogout() {
   await logoutAdmin();
   hideAdminRoomDetail();
-  navigateToHome();
+  showAdminLogin(true);
   showToast("অ্যাডমিন লগআউট হয়েছে", "success");
 }
 
@@ -395,59 +374,76 @@ async function handleAdminToggleRoom() {
   }
 }
 
-async function handleAdminCopyLink() {
-  const link = document.getElementById("adminRoomLink")?.value;
-  if (!link) return;
+async function handleAdminDeleteRoom() {
+  const roomId = getSelectedAdminRoomId();
+  if (!roomId) return;
+
+  const room = await getRoom(roomId);
+  const label = room?.label || roomId;
+  if (!confirm(`"${label}" রুম মুছে ফেলবেন? সদস্য ও মেসেজ সহ সব ডেটা মুছে যাবে।`)) {
+    return;
+  }
+
   try {
-    await navigator.clipboard.writeText(link);
-    showToast("লিংক কপি হয়েছে", "success");
-  } catch {
-    showToast("কপি করা যায়নি");
+    await ensureAnonymousAuth();
+    await deleteRoom(roomId);
+    hideAdminRoomDetail();
+    await refreshAdminRooms();
+    showToast("রুম মুছে ফেলা হয়েছে", "success");
+  } catch (err) {
+    showToast(formatFirebaseError(err));
   }
 }
 
-async function handleRoomGate(e) {
+async function handleChatLogin(e) {
   e.preventDefault();
-  const password = document.getElementById("roomPasswordInput")?.value || "";
-  const rawUsername = document.getElementById("roomGateUsername")?.value || "";
-  await startChatFromGate(password, rawUsername, false);
+  const roomId = normalizeRoomCode(document.getElementById("chatRoomInput")?.value || "");
+  const password = document.getElementById("chatPasswordInput")?.value || "";
+  await startChatFromLogin(roomId, password, false);
 }
 
-async function startChatFromGate(password, rawUsername, skipPasswordCheck) {
-  if (!currentRoomId) return;
-
-  const username = normalizeUserId(rawUsername);
-  if (!username) {
-    showRoomGateError("ইউজারনেম দিন");
+async function startChatFromLogin(roomId, password, skipPasswordCheck) {
+  const codeError = validateRoomCode(roomId);
+  if (codeError) {
+    showChatLoginError(codeError);
     playError();
     return;
   }
 
-  setRoomGateLoading(true);
+  setChatLoginLoading(true);
   isEnteringChat = true;
   try {
     await ensureAnonymousAuth();
+    currentRoomId = roomId;
 
-    const resolvedUsername = await resolveRoomMember(currentRoomId, username);
-
-    if (!skipPasswordCheck) {
+    let username;
+    if (skipPasswordCheck) {
+      const deviceSession = await getDeviceSession();
+      if (!deviceSession?.username || deviceSession.roomId !== roomId) {
+        throw new Error("আবার পাসওয়ার্ড দিন");
+      }
+      username = deviceSession.username;
+      if (!(await isMemberPasswordVerified(roomId, username))) {
+        throw new Error("আবার পাসওয়ার্ড দিন");
+      }
+      await resolveRoomMember(roomId, username);
+    } else {
       if (!password) throw new Error("পাসওয়ার্ড দিন");
-      await verifyMemberPassword(currentRoomId, resolvedUsername, password);
-    } else if (!(await isMemberPasswordVerified(currentRoomId, resolvedUsername))) {
-      throw new Error("আবার পাসওয়ার্ড দিন");
+      const member = await verifyRoomLogin(roomId, password);
+      username = member.id;
     }
 
-    const user = await enterChatAsMember(currentRoomId, resolvedUsername);
+    const user = await enterChatAsMember(roomId, username);
     enterChat(user);
     playLogin();
     showToast("চ্যাট শুরু হয়েছে", "success");
   } catch (err) {
-    console.error("Room gate failed:", err);
+    console.error("Chat login failed:", err);
     playError();
-    showRoomGateError(formatFirebaseError(err));
+    showChatLoginError(formatFirebaseError(err));
   } finally {
     isEnteringChat = false;
-    setRoomGateLoading(false);
+    setChatLoginLoading(false);
   }
 }
 
@@ -466,8 +462,8 @@ function exitChat() {
   stopChatSession();
   sessionStarted = false;
   partnerUsername = null;
-  if (currentRoomId) showView("gate");
-  else showView("home");
+  currentRoomId = null;
+  showView("home");
 }
 
 async function handleLogout() {
@@ -475,6 +471,7 @@ async function handleLogout() {
   await logout();
   await clearRoomSession();
   exitChat();
+  navigateToHome();
   showToast("লগআউট হয়েছে", "success");
 }
 

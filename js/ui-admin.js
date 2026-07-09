@@ -1,5 +1,4 @@
 import { escapeHtml } from "./ui.js";
-import { buildShareLink } from "./router.js";
 
 let selectedRoomId = null;
 
@@ -9,6 +8,11 @@ export function getSelectedAdminRoomId() {
 
 export function setSelectedAdminRoomId(roomId) {
   selectedRoomId = roomId;
+}
+
+export function showAdminLogin(show) {
+  document.getElementById("adminLoginSection")?.classList.toggle("d-none", !show);
+  document.getElementById("adminPanelSection")?.classList.toggle("d-none", show);
 }
 
 export function renderAdminRoomList(rooms, onSelect) {
@@ -29,7 +33,7 @@ export function renderAdminRoomList(rooms, onSelect) {
       return `
         <button type="button" class="admin-room-item" data-room-id="${escapeHtml(room.id)}">
           <div class="fw-semibold">${escapeHtml(room.label || room.id)}</div>
-          <div class="small text-muted">${room.memberCount || 0}/২ সদস্য · ${statusBadge}</div>
+          <div class="small text-muted">${escapeHtml(room.id)} · ${room.memberCount || 0}/২ সদস্য · ${statusBadge}</div>
         </button>`;
     })
     .join("");
@@ -45,7 +49,6 @@ export function renderAdminRoomDetail(room, members) {
 
   panel.classList.remove("d-none");
   document.getElementById("adminRoomTitle").textContent = room.label || room.id;
-  document.getElementById("adminRoomLink").value = buildShareLink(room.id);
   document.getElementById("adminRoomCode").textContent = room.id;
   document.getElementById("adminRoomStatusText").textContent =
     room.status === "disabled" ? "নিষ্ক্রিয়" : "সক্রিয়";
@@ -99,32 +102,32 @@ export function setAdminCreateLoading(loading) {
   document.getElementById("adminCreateRoomBtn")?.toggleAttribute("disabled", loading);
 }
 
-export function setRoomGateLoading(loading) {
-  document.getElementById("roomGateBtn")?.toggleAttribute("disabled", loading);
-  document.getElementById("roomGateSpinner")?.classList.toggle("d-none", !loading);
+export function setChatLoginLoading(loading) {
+  document.getElementById("chatLoginBtn")?.toggleAttribute("disabled", loading);
+  document.getElementById("chatLoginSpinner")?.classList.toggle("d-none", !loading);
 }
 
-export function showRoomGateError(message) {
-  const el = document.getElementById("roomGateError");
+export function showChatLoginError(message) {
+  const el = document.getElementById("chatLoginError");
   if (!el) return;
   el.textContent = message;
   el.classList.remove("d-none");
 }
 
-export function hideRoomGateError() {
-  document.getElementById("roomGateError")?.classList.add("d-none");
+export function hideChatLoginError() {
+  document.getElementById("chatLoginError")?.classList.add("d-none");
 }
 
-export function showQuickRoomHint(show) {
-  document.getElementById("quickRoomHint")?.classList.toggle("d-none", !show);
+export function showQuickChatHint(show) {
+  document.getElementById("quickChatHint")?.classList.toggle("d-none", !show);
 }
 
-export function setRoomGateQuickMode(enabled, username = "") {
-  const passwordWrap = document.getElementById("roomPasswordWrap");
-  const hint = document.getElementById("quickRoomHint");
-  const passwordInput = document.getElementById("roomPasswordInput");
-  const usernameInput = document.getElementById("roomGateUsername");
-  const btnText = document.querySelector(".room-gate-btn-text");
+export function setChatLoginQuickMode(enabled, roomId = "") {
+  const passwordWrap = document.getElementById("chatPasswordWrap");
+  const hint = document.getElementById("quickChatHint");
+  const passwordInput = document.getElementById("chatPasswordInput");
+  const roomInput = document.getElementById("chatRoomInput");
+  const btnText = document.querySelector(".chat-login-btn-text");
 
   passwordWrap?.classList.toggle("d-none", enabled);
   hint?.classList.toggle("d-none", !enabled);
@@ -138,16 +141,11 @@ export function setRoomGateQuickMode(enabled, username = "") {
     }
   }
 
-  if (enabled && username && usernameInput) {
-    usernameInput.value = username;
+  if (enabled && roomId && roomInput) {
+    roomInput.value = roomId;
   }
 
   if (btnText) {
     btnText.textContent = enabled ? "চালিয়ে যান" : "চ্যাট শুরু করুন";
   }
-}
-
-export function setRoomMemberHint(text) {
-  const el = document.getElementById("roomMemberHint");
-  if (el) el.textContent = text || "";
 }
