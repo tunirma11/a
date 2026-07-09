@@ -38,8 +38,7 @@ import {
   listenToMessages,
   listenRoomMeta,
   listenToRoomUsers,
-  markMessagesRead,
-  markMessagesDelivered,
+  markMessagesAcknowledged,
   softDeleteMessage,
   toggleMessagePin,
   toggleReaction,
@@ -73,6 +72,7 @@ import {
   renderPinnedBar,
   setUploadProgress,
   pulseSendButton,
+  resetMessageRenderCache,
   toggleRoomMenu,
   scrollToBottom,
   isOwnMessage,
@@ -106,6 +106,7 @@ import {
   playSync,
   playSentConfirm,
 } from "./sounds.js";
+import { formatLastSeen } from "./ui/format.js";
 import { normalizeRoomCode, validateRoomCode, CHAT_IDLE_MS, APP_NAME, TYPING_DEBOUNCE_MS, MESSAGE_DELETE_WINDOW_MS } from "./constants.js";
 import { formatFirebaseError } from "./errors.js";
 
@@ -135,6 +136,9 @@ let adminRooms = [];
 let chatIdleTimer = null;
 let lastChatActivityAt = 0;
 let markReadTimer = null;
+let ackTimer = null;
+let renderUiRaf = null;
+let lastPartnerStatusText = "";
 let messagesListenerRoomId = null;
 
 const CHAT_AUTH_KEY = "chat-authenticated";
@@ -590,6 +594,10 @@ function refreshPartnerHeader() {
   const online = isUsernameOnline(usersOnline, partnerUsername);
   const record = getPartnerUserRecord(partnerUsername);
   const typing = online && isPartnerTyping(roomPresence, partnerUsername);
+  let statusText = formatLastSeen(record?.lastSeen || 0, online);
+  if (online && typing) statusText = "অনলাইন · লিখছেন…";
+  if (statusText === lastPartnerStatusText) return;
+  lastPartnerStatusText = statusText;
   updatePartnerHeader(partner, online, record?.lastSeen || 0, typing);
 }
 
@@ -609,25 +617,46 @@ function buildReplyPayload(msg) {
 }
 
 function refreshMessageUI() {
-  const me = getCurrentUser();
-  const partner = partnerUsername ? getMemberById(partnerUsername) : null;
-  if (!me) return;
+  if (renderUiRaf) cancelAnimationFrame(renderUiRaf);
+  renderUiRaf = requestAnimationFrame(() => {
+    renderUiRaf = null;
+    const me = getCurrentUser();
+    const partner = partnerUsername ? getMemberById(partnerUsername) : null;
+    if (!me) return;
 
-  renderMessages(currentMessages, me.username, me.uid, pendingLocalMessages, {
-    onRetry: handleRetry,
-    onContextMenu: handleMessageContextMenu,
-    onReaction: handleReactionToggle,
-    onImageOpen: (url, name) => showImageLightbox(url, name),
-    partnerUsername,
-  }, partner);
+    const allMsgs = [
+      ...currentMessages,
+      ...pendingLocalMessages.filter(
+        (p) => !currentMessages.some((m) => m.localId && m.localId === p.localId)
+      ),
+    ];
 
-  renderPinnedBar(getPinnedMessage(), async (msgId) => {
-    try {
-      await toggleMessagePin(currentRoomId, msgId, false);
-    } catch (err) {
-      showToast(formatFirebaseError(err));
-    }
+    renderMessages(currentMessages, me.username, me.uid, pendingLocalMessages, {
+      onRetry: handleRetry,
+      onContextMenu: handleMessageContextMenu,
+      onReaction: handleReactionToggle,
+      onImageOpen: (url, name) => showImageLightbox(url, name),
+      partnerUsername,
+      getMessage: (id) => allMsgs.find((m) => m.id === id),
+    }, partner);
+
+    renderPinnedBar(getPinnedMessage(), async (msgId) => {
+      try {
+        await toggleMessagePin(currentRoomId, msgId, false);
+      } catch (err) {
+        showToast(formatFirebaseError(err));
+      }
+    });
   });
+}
+
+function scheduleMessageAck() {
+  const me = getCurrentUser();
+  if (!me || !currentRoomId || !currentMessages.length) return;
+  if (ackTimer) clearTimeout(ackTimer);
+  ackTimer = setTimeout(() => {
+    markMessagesAcknowledged(currentRoomId, currentMessages, me.username).catch(() => {});
+  }, 900);
 }
 
 function handleInputChange(e) {
@@ -866,7 +895,16 @@ function stopChatSession() {
     clearTimeout(markReadTimer);
     markReadTimer = null;
   }
-  resetMarkReadCache();
+  if (ackTimer) {
+    clearTimeout(ackTimer);
+    ackTimer = null;
+  }
+  if (renderUiRaf) {
+    cancelAnimationFrame(renderUiRaf);
+    renderUiRaf = null;
+  }
+  resetMessageRenderCache();
+  lastPartnerStatusText = "";
   replyToMessage = null;
   showReplyPreview(null);
   messagesListenerRoomId = null;
@@ -897,7 +935,8 @@ async function openPartnerChat(partner) {
   pendingLocalMessages = [];
   knownMessageIds = new Set();
   messagesInitialized = false;
-  resetMarkReadCache();
+  resetMessageRenderCache();
+  lastPartnerStatusText = "";
   messagesListenerRoomId = currentRoomId;
 
   unsubscribeMessages = listenToMessages(currentRoomId, async (messages, err) => {
@@ -943,13 +982,7 @@ async function openPartnerChat(partner) {
     });
 
     refreshMessageUI();
-
-    markMessagesDelivered(currentRoomId, messages, me.username).catch(() => {});
-
-    if (markReadTimer) clearTimeout(markReadTimer);
-    markReadTimer = setTimeout(() => {
-      markMessagesRead(currentRoomId, currentMessages, me.username).catch(() => {});
-    }, 400);
+    scheduleMessageAck();
   }, roomClearedAt);
 }
 

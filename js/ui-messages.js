@@ -169,6 +169,188 @@ export function isOwnMessage(msg, username, uid) {
   );
 }
 
+let renderCache = { bodyKey: "", ackKey: "", ids: [] };
+let messageHandlers = {};
+
+export function resetMessageRenderCache() {
+  renderCache = { bodyKey: "", ackKey: "", ids: [] };
+  const container = document.getElementById("messages");
+  if (container) delete container.dataset.eventsBound;
+}
+
+function buildAllMessages(messages, pendingLocal) {
+  return [
+    ...messages.map((m) => ({ ...m, status: m.status || "sent" })),
+    ...pendingLocal.filter(
+      (p) => !messages.some((m) => m.localId && m.localId === p.localId)
+    ),
+  ].sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+}
+
+function bodyKey(all) {
+  return all
+    .map((m) =>
+      [
+        m.id,
+        m.status,
+        m.text,
+        m.type,
+        m.deletedAt,
+        m.pinned,
+        JSON.stringify(m.reactions || {}),
+        m.imageUrl ? 1 : 0,
+      ].join(":")
+    )
+    .join("|");
+}
+
+function ackKey(all) {
+  return all
+    .map((m) => `${m.id}:${JSON.stringify(m.readBy || {})}:${JSON.stringify(m.deliveredBy || {})}`)
+    .join("|");
+}
+
+function buildMessageRowHtml(msg, index, all, currentUsername, currentUid, partner, partnerUsername, animate) {
+  const ts = msg.createdAt?.toMillis?.() ?? msg.createdAt ?? Date.now();
+  const isOwn = isOwnMessage(msg, currentUsername, currentUid);
+  const prevOwn = index > 0 ? isOwnMessage(all[index - 1], currentUsername, currentUid) : null;
+  const nextOwn = index < all.length - 1 ? isOwnMessage(all[index + 1], currentUsername, currentUid) : null;
+  const isFirst = prevOwn !== isOwn;
+  const isLast = nextOwn !== isOwn;
+  const rowClass = isOwn ? "own" : "other";
+  const groupClass = getMessageGroupClasses(isOwn, isFirst, isLast);
+  const pendingClass = msg.status === "pending" || msg.status === "sending" ? "pending" : "";
+  const failedClass = msg.status === "failed" ? "failed" : "";
+  const pinnedClass = msg.pinned ? "msg-pinned" : "";
+  const animClass = animate ? " msg-row-new" : " msg-row-stable";
+
+  const partnerAvatarHtml = partner
+    ? `<div class="msg-avatar avatar avatar-sm ${getAvatarColorClass(partner.id)}" aria-hidden="true">${getInitial(partner.name)}</div>`
+    : `<div class="msg-avatar msg-avatar-spacer" aria-hidden="true"></div>`;
+
+  const statusHtml = isOwn ? renderStatusIcon(msg.status, msg, partnerUsername) : "";
+  const retryBtn =
+    msg.status === "failed" && msg.localId
+      ? `<button class="retry-btn" data-local-id="${msg.localId}">আবার চেষ্টা</button>`
+      : "";
+  const avatarSlot = isOwn ? "" : isLast ? partnerAvatarHtml : `<div class="msg-avatar msg-avatar-spacer" aria-hidden="true"></div>`;
+
+  return `
+    <div class="msg-row ${rowClass} ${groupClass} ${pinnedClass}${animClass}" data-msg-id="${msg.id}">
+      ${avatarSlot}
+      <div class="msg-bubble ${pendingClass} ${failedClass}" data-msg-id="${msg.id}">
+        <div class="msg-body">
+          ${renderMessageBody(msg, isOwn)}
+          ${renderReactions(msg, currentUsername)}
+          <div class="msg-meta">
+            <span class="msg-time">${formatTime(ts)}</span>
+            ${statusHtml}
+            ${retryBtn}
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
+function patchMessageAcks(all, currentUsername, currentUid, partnerUsername) {
+  const container = document.getElementById("messages");
+  if (!container) return;
+
+  all.forEach((msg) => {
+    if (!isOwnMessage(msg, currentUsername, currentUid)) return;
+    const row = container.querySelector(`.msg-row[data-msg-id="${CSS.escape(msg.id)}"]`);
+    const meta = row?.querySelector(".msg-meta");
+    if (!meta) return;
+
+    const nextHtml = renderStatusIcon(msg.status, msg, partnerUsername);
+    const current = meta.querySelector(".msg-status");
+    if (!nextHtml) {
+      current?.remove();
+      return;
+    }
+
+    const wrap = document.createElement("div");
+    wrap.innerHTML = nextHtml;
+    const nextEl = wrap.firstElementChild;
+    if (!nextEl) return;
+
+    if (!current) {
+      meta.insertAdjacentElement("beforeend", nextEl);
+      return;
+    }
+
+    if (current.outerHTML !== nextEl.outerHTML) {
+      current.replaceWith(nextEl);
+    }
+  });
+}
+
+function ensureMessageEvents(container) {
+  if (container.dataset.eventsBound) return;
+  container.dataset.eventsBound = "1";
+
+  container.addEventListener("click", (e) => {
+    const retry = e.target.closest(".retry-btn");
+    if (retry) {
+      messageHandlers.onRetry?.(retry.dataset.localId);
+      return;
+    }
+    const pill = e.target.closest(".msg-reaction-pill");
+    if (pill) {
+      messageHandlers.onReaction?.(pill.dataset.msgId, pill.dataset.emoji);
+      return;
+    }
+    const imgBtn = e.target.closest(".msg-image-btn");
+    if (imgBtn) {
+      messageHandlers.onImageOpen?.(imgBtn.dataset.imageUrl, imgBtn.dataset.downloadName);
+    }
+  });
+
+  let pressTimer = null;
+  let pressTarget = null;
+
+  const openContext = (e, bubble) => {
+    const msg = messageHandlers.getMessage?.(bubble.dataset.msgId);
+    if (msg && !isMessageDeleted(msg)) {
+      messageHandlers.onContextMenu?.(e, msg);
+    }
+  };
+
+  container.addEventListener("contextmenu", (e) => {
+    const bubble = e.target.closest(".msg-bubble");
+    if (bubble) {
+      e.preventDefault();
+      openContext(e, bubble);
+    }
+  });
+
+  container.addEventListener(
+    "touchstart",
+    (e) => {
+      const bubble = e.target.closest(".msg-bubble");
+      if (!bubble) return;
+      pressTarget = bubble;
+      pressTimer = setTimeout(() => openContext(e, bubble), 500);
+    },
+    { passive: true }
+  );
+  container.addEventListener("touchend", () => {
+    clearTimeout(pressTimer);
+    pressTarget = null;
+  });
+  container.addEventListener("touchmove", () => clearTimeout(pressTimer));
+}
+
+function renderEmptyState(container) {
+  container.innerHTML = `
+    <div class="chat-empty">
+      <div class="chat-empty-icon">🌉</div>
+      <h3 class="chat-empty-title">কথোপকথন শুরু করুন</h3>
+      <p>প্রথম মেসেজ পাঠান — এটি শুধু আপনার সঙ্গী দেখতে পারবে</p>
+    </div>`;
+  resetMessageRenderCache();
+}
+
 export function renderPinnedBar(pinnedMessage, onUnpin) {
   const bar = document.getElementById("pinnedBar");
   if (!bar) return;
@@ -190,35 +372,67 @@ export function renderPinnedBar(pinnedMessage, onUnpin) {
 
 export function renderMessages(messages, currentUsername, currentUid, pendingLocal = [], handlers = {}, partner = null) {
   const container = document.getElementById("messages");
+  if (!container) return;
   document.getElementById("messagesSkeleton")?.remove();
 
-  const { onRetry, onContextMenu, onReaction, onImageOpen, partnerUsername } = handlers;
-
-  const all = [
-    ...messages.map((m) => ({ ...m, status: m.status || "sent" })),
-    ...pendingLocal.filter(
-      (p) => !messages.some((m) => m.localId && m.localId === p.localId)
-    ),
-  ].sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+  messageHandlers = handlers;
+  const { partnerUsername } = handlers;
+  const all = buildAllMessages(messages, pendingLocal);
 
   if (all.length === 0) {
-    container.innerHTML = `
-      <div class="chat-empty">
-        <div class="chat-empty-icon">🌉</div>
-        <h3 class="chat-empty-title">কথোপকথন শুরু করুন</h3>
-        <p>প্রথম মেসেজ পাঠান — এটি শুধু আপনার সঙ্গী দেখতে পারবে</p>
-      </div>`;
+    renderEmptyState(container);
+    return;
+  }
+
+  const newBodyKey = bodyKey(all);
+  const newAckKey = ackKey(all);
+  const wasNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 150;
+
+  ensureMessageEvents(container);
+
+  if (renderCache.bodyKey === newBodyKey && renderCache.ids.length === all.length) {
+    if (renderCache.ackKey !== newAckKey) {
+      patchMessageAcks(all, currentUsername, currentUid, partnerUsername);
+      renderCache.ackKey = newAckKey;
+    }
+    return;
+  }
+
+  const canAppend =
+    renderCache.ids.length > 0 &&
+    all.length > renderCache.ids.length &&
+    renderCache.ids.every((id, i) => all[i]?.id === id);
+
+  if (canAppend) {
+    let html = "";
+    let lastDate = "";
+    const existingDates = [...container.querySelectorAll(".date-separator span")].map((el) => el.textContent);
+    if (existingDates.length) lastDate = existingDates[existingDates.length - 1];
+
+    for (let index = renderCache.ids.length; index < all.length; index++) {
+      const msg = all[index];
+      const ts = msg.createdAt?.toMillis?.() ?? msg.createdAt ?? Date.now();
+      const dateLabel = formatDateSeparator(ts);
+      if (dateLabel && dateLabel !== lastDate) {
+        html += `<div class="date-separator"><span>${dateLabel}</span></div>`;
+        lastDate = dateLabel;
+      }
+      html += buildMessageRowHtml(
+        msg, index, all, currentUsername, currentUid, partner, partnerUsername, true
+      );
+    }
+
+    container.insertAdjacentHTML("beforeend", html);
+    renderCache.bodyKey = newBodyKey;
+    renderCache.ackKey = newAckKey;
+    renderCache.ids = all.map((m) => m.id);
+
+    if (wasNearBottom) scrollToBottom();
     return;
   }
 
   let html = "";
   let lastDate = "";
-  let animIndex = 0;
-
-  const partnerAvatarHtml = partner
-    ? `<div class="msg-avatar avatar avatar-sm ${getAvatarColorClass(partner.id)}" aria-hidden="true">${getInitial(partner.name)}</div>`
-    : `<div class="msg-avatar msg-avatar-spacer" aria-hidden="true"></div>`;
-
   all.forEach((msg, index) => {
     const ts = msg.createdAt?.toMillis?.() ?? msg.createdAt ?? Date.now();
     const dateLabel = formatDateSeparator(ts);
@@ -226,81 +440,17 @@ export function renderMessages(messages, currentUsername, currentUid, pendingLoc
       html += `<div class="date-separator"><span>${dateLabel}</span></div>`;
       lastDate = dateLabel;
     }
-
-    const isOwn = isOwnMessage(msg, currentUsername, currentUid);
-    const prevOwn = index > 0 ? isOwnMessage(all[index - 1], currentUsername, currentUid) : null;
-    const nextOwn = index < all.length - 1 ? isOwnMessage(all[index + 1], currentUsername, currentUid) : null;
-    const isFirst = prevOwn !== isOwn;
-    const isLast = nextOwn !== isOwn;
-    const rowClass = isOwn ? "own" : "other";
-    const groupClass = getMessageGroupClasses(isOwn, isFirst, isLast);
-    const pendingClass = msg.status === "pending" || msg.status === "sending" ? "pending" : "";
-    const failedClass = msg.status === "failed" ? "failed" : "";
-    const pinnedClass = msg.pinned ? "msg-pinned" : "";
-    const delay = Math.min(animIndex * 0.02, 0.3);
-    animIndex += 1;
-
-    const statusHtml = isOwn ? renderStatusIcon(msg.status, msg, partnerUsername) : "";
-    const retryBtn =
-      msg.status === "failed" && msg.localId
-        ? `<button class="retry-btn" data-local-id="${msg.localId}">আবার চেষ্টা</button>`
-        : "";
-
-    const avatarSlot = isOwn ? "" : isLast ? partnerAvatarHtml : `<div class="msg-avatar msg-avatar-spacer" aria-hidden="true"></div>`;
-
-    html += `
-      <div class="msg-row ${rowClass} ${groupClass} ${pinnedClass}" data-msg-id="${msg.id}" style="animation-delay:${delay}s">
-        ${avatarSlot}
-        <div class="msg-bubble ${pendingClass} ${failedClass}" data-msg-id="${msg.id}">
-          <div class="msg-body">
-            ${renderMessageBody(msg, isOwn)}
-            ${renderReactions(msg, currentUsername)}
-            <div class="msg-meta">
-              <span class="msg-time">${formatTime(ts)}</span>
-              ${statusHtml}
-              ${retryBtn}
-            </div>
-          </div>
-        </div>
-      </div>`;
-  });
-
-  const wasNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 150;
-  container.innerHTML = html;
-
-  container.querySelectorAll(".retry-btn").forEach((btn) => {
-    btn.addEventListener("click", () => onRetry?.(btn.dataset.localId));
-  });
-
-  container.querySelectorAll(".msg-bubble").forEach((bubble) => {
-    const msgId = bubble.dataset.msgId;
-    const msg = all.find((m) => m.id === msgId);
-    if (!msg || isMessageDeleted(msg)) return;
-
-    bubble.addEventListener("contextmenu", (e) => {
-      e.preventDefault();
-      onContextMenu?.(e, msg);
-    });
-
-    let pressTimer;
-    bubble.addEventListener("touchstart", (e) => {
-      pressTimer = setTimeout(() => onContextMenu?.(e, msg), 500);
-    }, { passive: true });
-    bubble.addEventListener("touchend", () => clearTimeout(pressTimer));
-    bubble.addEventListener("touchmove", () => clearTimeout(pressTimer));
-  });
-
-  container.querySelectorAll(".msg-reaction-pill").forEach((btn) => {
-    btn.addEventListener("click", () => onReaction?.(btn.dataset.msgId, btn.dataset.emoji));
-  });
-
-  container.querySelectorAll(".msg-image-btn").forEach((btn) => {
-    btn.addEventListener("click", () =>
-      onImageOpen?.(btn.dataset.imageUrl, btn.dataset.downloadName)
+    html += buildMessageRowHtml(
+      msg, index, all, currentUsername, currentUid, partner, partnerUsername, false
     );
   });
 
-  if (wasNearBottom || animIndex <= 3) scrollToBottom();
+  container.innerHTML = html;
+  renderCache.bodyKey = newBodyKey;
+  renderCache.ackKey = newAckKey;
+  renderCache.ids = all.map((m) => m.id);
+
+  if (wasNearBottom || all.length <= 3) scrollToBottom(false);
   bindMessagesScroll();
 }
 

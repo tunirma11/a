@@ -245,6 +245,42 @@ export async function markMessageRead(roomId, messageId) {
   }).catch(() => {});
 }
 
+export async function markMessagesAcknowledged(roomId, messages, myUsername) {
+  const toUpdate = messages.filter((m) => {
+    if (m.senderId === myUsername || m.deletedAt) return false;
+    const needDeliver = !isAlreadyDelivered(m, myUsername);
+    const needRead = !isAlreadyRead(m, myUsername);
+    return needDeliver || needRead;
+  });
+  if (!toUpdate.length) return;
+
+  const batch = writeBatch(db);
+  toUpdate.slice(0, 50).forEach((m) => {
+    const ref = doc(db, "rooms", roomId, "messages", m.id);
+    const updates = {};
+    if (!isAlreadyDelivered(m, myUsername)) {
+      updates[`deliveredBy.${myUsername}`] = serverTimestamp();
+      pendingMarkDeliveredIds.add(m.id);
+    }
+    if (!isAlreadyRead(m, myUsername)) {
+      updates[`readBy.${myUsername}`] = serverTimestamp();
+      updates.read = true;
+      pendingMarkReadIds.add(m.id);
+    }
+    if (Object.keys(updates).length) batch.update(ref, updates);
+  });
+
+  try {
+    await batch.commit();
+  } catch (err) {
+    toUpdate.forEach((m) => {
+      pendingMarkDeliveredIds.delete(m.id);
+      pendingMarkReadIds.delete(m.id);
+    });
+    console.warn("markMessagesAcknowledged failed:", err);
+  }
+}
+
 export async function markMessagesDelivered(roomId, messages, myUsername) {
   const undelivered = messages.filter(
     (m) =>

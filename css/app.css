@@ -425,9 +425,16 @@ html, body {
   width: 100%;
   margin-bottom: 1px;
   padding: 0 2px;
-  animation: msgSlideIn 0.35s var(--ease-out-expo) both;
   align-items: flex-end;
   gap: 6px;
+}
+
+.msg-row.msg-row-new {
+  animation: msgSlideIn 0.3s var(--ease-out-expo) both;
+}
+
+.msg-row.msg-row-stable {
+  animation: none;
 }
 
 .msg-row.own {

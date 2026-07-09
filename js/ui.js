@@ -16,6 +16,7 @@ export {
   renderPinnedBar,
   setUploadProgress,
   pulseSendButton,
+  resetMessageRenderCache,
   getInitial,
   getAvatarColorClass,
 } from "./ui-messages.js";
