@@ -3,13 +3,6 @@ import {
   MAX_IMAGE_DIMENSION,
   MAX_IMAGE_DATA_URL_LENGTH,
 } from "../constants.js";
-import { storage } from "../firebase.js";
-import {
-  ref,
-  uploadBytes,
-  getDownloadURL,
-} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js";
-import { generateLocalId } from "../store.js";
 
 export function blobToDataUrl(blob) {
   return new Promise((resolve, reject) => {
@@ -76,18 +69,18 @@ export function compressImage(file, maxDim = MAX_IMAGE_DIMENSION) {
             return;
           }
 
-          if (width > 640) {
-            width = Math.round(width * 0.8);
-            height = Math.round(height * 0.8);
+          if (width > 480) {
+            width = Math.round(width * 0.75);
+            height = Math.round(height * 0.75);
           }
         }
 
-        if (best) {
+        if (best && best.dataUrl.length <= MAX_IMAGE_DATA_URL_LENGTH) {
           resolve(best);
           return;
         }
 
-        reject(new Error("ছবি প্রসেস করা যায়নি"));
+        reject(new Error("ছবি খুব বড় — আরও ছোট ছবি পাঠান"));
       } catch (err) {
         reject(err);
       }
@@ -100,33 +93,11 @@ export function compressImage(file, maxDim = MAX_IMAGE_DIMENSION) {
   });
 }
 
-async function uploadToStorage(roomId, blob) {
-  const fileName = `${Date.now()}_${generateLocalId().slice(-8)}.webp`;
-  const storageRef = ref(storage, `rooms/${roomId}/images/${fileName}`);
-  await uploadBytes(storageRef, blob, { contentType: "image/webp" });
-  return getDownloadURL(storageRef);
-}
-
-/** Prefer Firebase Storage; fall back to inline only if upload fails */
-export async function prepareImageForMessage(file, onProgress, roomId) {
-  onProgress?.(0.15);
+/** Inline base64 only — Firebase Storage ব্যবহার করে না */
+export async function prepareImageForMessage(file, onProgress) {
+  onProgress?.(0.2);
   const result = await compressImage(file);
-  onProgress?.(0.45);
-
-  if (roomId) {
-    try {
-      const url = await uploadToStorage(roomId, result.blob);
-      onProgress?.(1);
-      return {
-        imageUrl: url,
-        imageThumbUrl: url,
-        width: result.width,
-        height: result.height,
-      };
-    } catch (err) {
-      console.warn("Storage upload failed, using inline fallback:", err);
-    }
-  }
+  onProgress?.(0.85);
 
   if (result.dataUrl.length > MAX_IMAGE_DATA_URL_LENGTH) {
     throw new Error("ছবি খুব বড় — আরও ছোট ছবি পাঠান");

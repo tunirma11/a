@@ -2,13 +2,55 @@ const DB_NAME = "chat-app-db";
 const DB_VERSION = 1;
 const OUTBOX_STORE = "outbox";
 const PREFS_STORE = "preferences";
+const LS_PREFIX = "chatapp_";
+const MAX_OUTBOX_IMAGE_URL = 120000;
 
 let dbPromise = null;
+let idbDisabled = false;
+
+function lsKey(key) {
+  return `${LS_PREFIX}${key}`;
+}
+
+function lsGet(key) {
+  try {
+    const raw = localStorage.getItem(lsKey(key));
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function lsSet(key, value) {
+  try {
+    localStorage.setItem(lsKey(key), JSON.stringify(value));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function lsRemove(key) {
+  try {
+    localStorage.removeItem(lsKey(key));
+  } catch {
+    /* ignore */
+  }
+}
 
 function openDB() {
+  if (idbDisabled) {
+    return Promise.reject(new Error("IndexedDB unavailable"));
+  }
   if (dbPromise) return dbPromise;
 
   dbPromise = new Promise((resolve, reject) => {
+    if (!window.indexedDB) {
+      idbDisabled = true;
+      reject(new Error("IndexedDB unavailable"));
+      return;
+    }
+
     const request = indexedDB.open(DB_NAME, DB_VERSION);
 
     request.onupgradeneeded = (event) => {
@@ -24,86 +66,149 @@ function openDB() {
     };
 
     request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
+    request.onerror = () => {
+      idbDisabled = true;
+      dbPromise = null;
+      reject(request.error || new Error("IndexedDB open failed"));
+    };
   });
 
   return dbPromise;
 }
 
-function tx(storeName, mode) {
-  return openDB().then(
-    (db) => db.transaction(storeName, mode).objectStore(storeName)
-  );
+async function tx(storeName, mode) {
+  const db = await openDB();
+  return db.transaction(storeName, mode).objectStore(storeName);
+}
+
+function sanitizeOutboxMessage(message) {
+  const next = { ...message };
+  if (next.imageUrl && String(next.imageUrl).length > MAX_OUTBOX_IMAGE_URL) {
+    delete next.imageUrl;
+    next.imageTooLarge = true;
+  }
+  return next;
+}
+
+export async function clearOutbox() {
+  try {
+    const store = await tx(OUTBOX_STORE, "readwrite");
+    await new Promise((resolve, reject) => {
+      const req = store.clear();
+      req.onsuccess = () => resolve();
+      req.onerror = () => reject(req.error);
+    });
+  } catch {
+    /* ignore */
+  }
 }
 
 export async function addToOutbox(message) {
-  const store = await tx(OUTBOX_STORE, "readwrite");
-  return new Promise((resolve, reject) => {
-    const req = store.put(message);
-    req.onsuccess = () => resolve();
-    req.onerror = () => reject(req.error);
-  });
+  const safe = sanitizeOutboxMessage(message);
+  try {
+    const store = await tx(OUTBOX_STORE, "readwrite");
+    await new Promise((resolve, reject) => {
+      const req = store.put(safe);
+      req.onsuccess = () => resolve();
+      req.onerror = () => reject(req.error);
+    });
+  } catch (err) {
+    console.warn("outbox save failed:", err);
+    idbDisabled = true;
+    dbPromise = null;
+    throw err;
+  }
 }
 
 export async function getPendingMessages() {
-  const store = await tx(OUTBOX_STORE, "readonly");
-  return new Promise((resolve, reject) => {
-    const req = store.getAll();
-    req.onsuccess = () => {
-      const all = req.result || [];
-      resolve(
-        all
-          .filter((m) => m.status === "pending" || m.status === "failed")
-          .sort((a, b) => a.createdAt - b.createdAt)
-      );
-    };
-    req.onerror = () => reject(req.error);
-  });
+  try {
+    const store = await tx(OUTBOX_STORE, "readonly");
+    return await new Promise((resolve, reject) => {
+      const req = store.getAll();
+      req.onsuccess = () => {
+        const all = req.result || [];
+        resolve(
+          all
+            .filter((m) => m.status === "pending" || m.status === "failed")
+            .sort((a, b) => a.createdAt - b.createdAt)
+        );
+      };
+      req.onerror = () => reject(req.error);
+    });
+  } catch (err) {
+    console.warn("outbox read failed, resetting:", err);
+    idbDisabled = true;
+    dbPromise = null;
+    await clearOutbox();
+    return [];
+  }
 }
 
 export async function updateOutboxMessage(id, updates) {
-  const store = await tx(OUTBOX_STORE, "readwrite");
-  return new Promise((resolve, reject) => {
-    const getReq = store.get(id);
-    getReq.onsuccess = () => {
-      const existing = getReq.result;
-      if (!existing) {
-        resolve();
-        return;
-      }
-      const putReq = store.put({ ...existing, ...updates });
-      putReq.onsuccess = () => resolve();
-      putReq.onerror = () => reject(putReq.error);
-    };
-    getReq.onerror = () => reject(getReq.error);
-  });
+  try {
+    const store = await tx(OUTBOX_STORE, "readwrite");
+    return await new Promise((resolve, reject) => {
+      const getReq = store.get(id);
+      getReq.onsuccess = () => {
+        const existing = getReq.result;
+        if (!existing) {
+          resolve();
+          return;
+        }
+        const putReq = store.put({ ...existing, ...updates });
+        putReq.onsuccess = () => resolve();
+        putReq.onerror = () => reject(putReq.error);
+      };
+      getReq.onerror = () => reject(getReq.error);
+    });
+  } catch (err) {
+    console.warn("outbox update failed:", err);
+  }
 }
 
 export async function removeFromOutbox(id) {
-  const store = await tx(OUTBOX_STORE, "readwrite");
-  return new Promise((resolve, reject) => {
-    const req = store.delete(id);
-    req.onsuccess = () => resolve();
-    req.onerror = () => reject(req.error);
-  });
+  try {
+    const store = await tx(OUTBOX_STORE, "readwrite");
+    await new Promise((resolve, reject) => {
+      const req = store.delete(id);
+      req.onsuccess = () => resolve();
+      req.onerror = () => reject(req.error);
+    });
+  } catch (err) {
+    console.warn("outbox remove failed:", err);
+  }
 }
 
 export async function getPreference(key) {
-  const store = await tx(PREFS_STORE, "readonly");
-  return new Promise((resolve, reject) => {
-    const req = store.get(key);
-    req.onsuccess = () => resolve(req.result?.value ?? null);
-    req.onerror = () => reject(req.error);
-  });
+  const cached = lsGet(key);
+  if (cached !== null) return cached;
+
+  try {
+    const store = await tx(PREFS_STORE, "readonly");
+    const value = await new Promise((resolve, reject) => {
+      const req = store.get(key);
+      req.onsuccess = () => resolve(req.result?.value ?? null);
+      req.onerror = () => reject(req.error);
+    });
+    if (value !== null) lsSet(key, value);
+    return value;
+  } catch {
+    return lsGet(key);
+  }
 }
 
 export async function setPreference(key, value) {
-  const store = await tx(PREFS_STORE, "readwrite");
-  return new Promise((resolve, reject) => {
-    const req = store.put({ key, value });
-    req.onsuccess = () => resolve();
-    req.onerror = () => reject(req.error);
-  });
+  lsSet(key, value);
+  try {
+    const store = await tx(PREFS_STORE, "readwrite");
+    await new Promise((resolve, reject) => {
+      const req = store.put({ key, value });
+      req.onsuccess = () => resolve();
+      req.onerror = () => reject(req.error);
+    });
+  } catch (err) {
+    console.warn("preference IDB save failed, localStorage kept:", err);
+  }
 }
 
 export async function getLastChatUser() {
@@ -135,12 +240,18 @@ export async function getAdminSession() {
 
 export async function saveAdminSession(session) {
   if (!session) {
-    const store = await tx(PREFS_STORE, "readwrite");
-    return new Promise((resolve, reject) => {
-      const req = store.delete(ADMIN_SESSION_KEY);
-      req.onsuccess = () => resolve();
-      req.onerror = () => reject(req.error);
-    });
+    lsRemove(ADMIN_SESSION_KEY);
+    try {
+      const store = await tx(PREFS_STORE, "readwrite");
+      await new Promise((resolve, reject) => {
+        const req = store.delete(ADMIN_SESSION_KEY);
+        req.onsuccess = () => resolve();
+        req.onerror = () => reject(req.error);
+      });
+    } catch {
+      /* ignore */
+    }
+    return;
   }
   return setPreference(ADMIN_SESSION_KEY, session);
 }
@@ -155,12 +266,18 @@ export async function getRoomSession() {
 
 export async function saveRoomSession(session) {
   if (!session) {
-    const store = await tx(PREFS_STORE, "readwrite");
-    return new Promise((resolve, reject) => {
-      const req = store.delete(ROOM_SESSION_KEY);
-      req.onsuccess = () => resolve();
-      req.onerror = () => reject(req.error);
-    });
+    lsRemove(ROOM_SESSION_KEY);
+    try {
+      const store = await tx(PREFS_STORE, "readwrite");
+      await new Promise((resolve, reject) => {
+        const req = store.delete(ROOM_SESSION_KEY);
+        req.onsuccess = () => resolve();
+        req.onerror = () => reject(req.error);
+      });
+    } catch {
+      /* ignore */
+    }
+    return;
   }
   return setPreference(ROOM_SESSION_KEY, session);
 }
@@ -175,12 +292,18 @@ export async function getDeviceSession() {
 
 export async function saveDeviceSession(session) {
   if (!session) {
-    const store = await tx(PREFS_STORE, "readwrite");
-    return new Promise((resolve, reject) => {
-      const req = store.delete(DEVICE_SESSION_KEY);
-      req.onsuccess = () => resolve();
-      req.onerror = () => reject(req.error);
-    });
+    lsRemove(DEVICE_SESSION_KEY);
+    try {
+      const store = await tx(PREFS_STORE, "readwrite");
+      await new Promise((resolve, reject) => {
+        const req = store.delete(DEVICE_SESSION_KEY);
+        req.onsuccess = () => resolve();
+        req.onerror = () => reject(req.error);
+      });
+    } catch {
+      /* ignore */
+    }
+    return;
   }
   return setPreference(DEVICE_SESSION_KEY, session);
 }

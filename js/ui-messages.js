@@ -237,12 +237,13 @@ function renderNewMessagesSeparator() {
   return `<div class="new-messages-separator" role="separator" aria-label="নতুন মেসেজ"><span>নতুন মেসেজ</span></div>`;
 }
 
-function buildMessagesHtml(all, startIndex, currentUsername, currentUid, partner, partnerUsername, animate, newMessagesSince, initialLastDate = "") {
+function buildMessagesHtml(all, startIndex, currentUsername, currentUid, partner, partnerUsername, animate, newMessagesSince, initialLastDate = "", endIndex = all.length) {
   let html = "";
   let lastDate = initialLastDate;
   const dividerIdx = getNewDividerBeforeIndex(all, newMessagesSince, currentUsername, currentUid);
+  const stop = Math.min(endIndex, all.length);
 
-  for (let index = startIndex; index < all.length; index++) {
+  for (let index = startIndex; index < stop; index++) {
     const msg = all[index];
     if (index === dividerIdx) html += renderNewMessagesSeparator();
 
@@ -427,7 +428,7 @@ export function renderPinnedBar(pinnedMessage, onUnpin) {
 }
 
 function applyScrollPolicy(container, policy) {
-  if (!policy || policy === "none") return;
+  if (!policy || policy === "none" || policy === "preserve") return;
   if (policy === "force") {
     scrollToBottom(false);
     return;
@@ -473,6 +474,35 @@ export function renderMessages(messages, currentUsername, currentUid, pendingLoc
     renderCache.ids.length > 0 &&
     all.length > renderCache.ids.length &&
     renderCache.ids.every((id, i) => all[i]?.id === id);
+
+  const tailCount = renderCache.ids.length;
+  const canPrepend =
+    renderCache.ids.length > 0 &&
+    all.length > tailCount &&
+    all.slice(all.length - tailCount).every((m, i) => m.id === renderCache.ids[i]);
+
+  if (canPrepend) {
+    const prependCount = all.length - tailCount;
+    const chunk = buildMessagesHtml(
+      all,
+      0,
+      currentUsername,
+      currentUid,
+      partner,
+      partnerUsername,
+      false,
+      0,
+      "",
+      prependCount
+    );
+
+    container.insertAdjacentHTML("afterbegin", chunk.html);
+    renderCache.bodyKey = newBodyKey;
+    renderCache.ackKey = newAckKey;
+    renderCache.ids = all.map((m) => m.id);
+    applyScrollPolicy(container, scrollPolicy);
+    return;
+  }
 
   if (canAppend) {
     let lastDate = "";

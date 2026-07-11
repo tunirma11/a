@@ -5,6 +5,7 @@ import {
   addDoc,
   updateDoc,
   deleteDoc,
+  getDoc,
   getDocs,
   onSnapshot,
   query,
@@ -148,6 +149,9 @@ export async function sendMessage(roomId, text, options = {}) {
   };
 
   if (!navigator.onLine) {
+    if (isImage) {
+      throw new Error("অফলাইনে ছবি পাঠানো যাবে না — ইন্টারনেট চালু করে আবার চেষ্টা করুন");
+    }
     await addToOutbox({
       id: localId,
       roomId,
@@ -248,15 +252,38 @@ export function listenToRecentMessages(roomId, callback, clearedAt = 0) {
   );
 }
 
-export async function fetchOlderMessages(roomId, oldestCreatedAtMs, clearedAt = 0) {
-  if (!roomId || !oldestCreatedAtMs) {
-    return { messages: [], hasMore: false };
+export async function fetchOlderMessages(roomId, oldestMessage, clearedAt = 0) {
+  if (!roomId || !oldestMessage?.id) {
+    return { messages: [], hasMore: false, cursor: null };
+  }
+
+  const oldestRef = doc(db, "rooms", roomId, "messages", oldestMessage.id);
+  const oldestSnap = await getDoc(oldestRef);
+  if (!oldestSnap.exists()) {
+    const fallbackMs = oldestMessage.createdAt;
+    if (!fallbackMs) return { messages: [], hasMore: false, cursor: null };
+    const q = query(
+      collection(db, "rooms", roomId, "messages"),
+      orderBy("createdAt", "desc"),
+      startAfter(Timestamp.fromMillis(fallbackMs)),
+      limit(MESSAGES_PAGE_SIZE)
+    );
+    const snap = await getDocs(q);
+    const messages = snap.docs
+      .map((d) => normalizeMessage({ id: d.id, ...d.data() }))
+      .filter((m) => isMessageVisible(m, clearedAt))
+      .reverse();
+    return {
+      messages,
+      hasMore: snap.docs.length >= MESSAGES_PAGE_SIZE,
+      cursor: snap.docs[snap.docs.length - 1] || null,
+    };
   }
 
   const q = query(
     collection(db, "rooms", roomId, "messages"),
     orderBy("createdAt", "desc"),
-    startAfter(Timestamp.fromMillis(oldestCreatedAtMs)),
+    startAfter(oldestSnap),
     limit(MESSAGES_PAGE_SIZE)
   );
 
@@ -269,6 +296,7 @@ export async function fetchOlderMessages(roomId, oldestCreatedAtMs, clearedAt = 
   return {
     messages,
     hasMore: snap.docs.length >= MESSAGES_PAGE_SIZE,
+    cursor: snap.docs[snap.docs.length - 1] || null,
   };
 }
 

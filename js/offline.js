@@ -38,6 +38,10 @@ export async function flushOutbox() {
     const pending = await getPendingMessages();
     for (const item of pending) {
       if (item.status === "failed" && (item.retries || 0) >= 3) continue;
+      if (item.imageTooLarge) {
+        await removeFromOutbox(item.id);
+        continue;
+      }
 
       await updateOutboxMessage(item.id, { status: "pending" });
       try {
@@ -59,6 +63,8 @@ export async function flushOutbox() {
         });
       }
     }
+  } catch (err) {
+    console.warn("flushOutbox failed:", err);
   } finally {
     isFlushing = false;
     setStatus(navigator.onLine ? "online" : "offline");
@@ -70,7 +76,7 @@ export function initOfflineSync() {
 
   window.addEventListener("online", () => {
     setStatus("syncing");
-    flushOutbox();
+    flushOutbox().catch(() => {});
   });
 
   window.addEventListener("offline", () => {
@@ -78,7 +84,7 @@ export function initOfflineSync() {
   });
 
   if (navigator.onLine) {
-    flushOutbox();
+    flushOutbox().catch(() => {});
   }
 }
 

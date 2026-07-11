@@ -62,6 +62,8 @@ export async function enterChatAsMember(roomId, username) {
       username,
       sessionId,
       lastActiveAt: Date.now(),
+    }).catch((err) => {
+      console.warn("device session local save failed:", err);
     });
     return user;
   } catch (err) {

@@ -6,8 +6,13 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
     }
 
-    function isRoomMember(roomId) {
+    function hasUserProfile() {
       return request.auth != null
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    function isRoomMember(roomId) {
+      return hasUserProfile()
         && userDoc().roomId == roomId
         && userDoc().username is string;
     }
@@ -112,8 +117,10 @@ service cloud.firestore {
 
     match /users/{uid} {
       allow read: if request.auth != null
-        && (request.auth.uid == uid
-          || resource.data.roomId == userDoc().roomId);
+        && (
+          request.auth.uid == uid
+          || (hasUserProfile() && resource.data.roomId == userDoc().roomId)
+        );
       allow create: if request.auth != null
         && request.auth.uid == uid
         && request.resource.data.roomId is string

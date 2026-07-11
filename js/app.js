@@ -154,6 +154,8 @@ let loginMessageBaseline = 0;
 let olderMessages = [];
 let hasMoreOlder = false;
 let loadingOlder = false;
+let autoLoadingHistory = false;
+let historyLoadGeneration = 0;
 let roomMeta = { clearedAt: 0, retentionDays: null, imageStripDays: null, lastMaintenanceAt: 0 };
 let recentMessages = [];
 let scrollToBottomNext = false;
@@ -243,9 +245,6 @@ async function init() {
   });
   document.getElementById("searchMessagesBtn")?.addEventListener("click", handleOpenSearch);
   document.getElementById("clearChatBtn")?.addEventListener("click", handleClearChat);
-  document.getElementById("loadOlderBtn")?.addEventListener("click", () => {
-    handleLoadOlderMessages().catch(() => {});
-  });
   document.addEventListener("click", () => toggleRoomMenu(false));
 
   onRouteChange(async (route) => {
@@ -686,47 +685,66 @@ function mergeDisplayedMessages() {
   return merged;
 }
 
-async function handleLoadOlderMessages() {
-  if (!currentRoomId || loadingOlder || !hasMoreOlder || !currentMessages.length) return;
+async function loadOlderMessageBatch({ preserveScroll = true } = {}) {
+  if (!currentRoomId || loadingOlder || !hasMoreOlder || !currentMessages.length) return false;
   const oldest = currentMessages[0];
-  if (!oldest?.createdAt) return;
+  if (!oldest?.id) return false;
 
   const container = document.getElementById("messages");
   const prevHeight = container?.scrollHeight || 0;
+  const prevTop = container?.scrollTop || 0;
+  const nearBottom = container
+    ? container.scrollHeight - container.scrollTop - container.clientHeight < 120
+    : true;
 
   loadingOlder = true;
-  updateLoadOlderButton();
   try {
     const { messages, hasMore } = await fetchOlderMessages(
       currentRoomId,
-      oldest.createdAt,
+      oldest,
       roomClearedAt
     );
     const existingIds = new Set([...olderMessages, ...recentMessages].map((m) => m.id));
     const unique = messages.filter((m) => !existingIds.has(m.id));
-    olderMessages = [...unique, ...olderMessages];
-    hasMoreOlder = hasMore;
-    currentMessages = mergeDisplayedMessages();
-    refreshMessageUI();
-    if (container) {
-      requestAnimationFrame(() => {
-        container.scrollTop = container.scrollHeight - prevHeight;
-      });
+    if (unique.length) {
+      olderMessages = [...unique, ...olderMessages];
+      currentMessages = mergeDisplayedMessages();
+      refreshMessageUI({ scrollPolicy: preserveScroll && !nearBottom ? "preserve" : "if-near" });
+      if (container && preserveScroll && !nearBottom) {
+        requestAnimationFrame(() => {
+          const delta = container.scrollHeight - prevHeight;
+          container.scrollTop = prevTop + delta;
+        });
+      }
     }
+    hasMoreOlder = hasMore;
+    return hasMore;
   } catch (err) {
-    showToast(formatFirebaseError(err));
+    console.warn("load older messages:", err);
+    return hasMoreOlder;
   } finally {
     loadingOlder = false;
-    updateLoadOlderButton();
   }
 }
 
-function updateLoadOlderButton() {
-  const btn = document.getElementById("loadOlderBtn");
-  if (!btn) return;
-  btn.classList.toggle("d-none", !hasMoreOlder);
-  btn.disabled = loadingOlder;
-  btn.textContent = loadingOlder ? "লোড হচ্ছে…" : "আগের মেসেজ দেখুন";
+async function autoLoadAllHistory() {
+  if (!currentRoomId || autoLoadingHistory) return;
+  const generation = ++historyLoadGeneration;
+  autoLoadingHistory = true;
+  try {
+    while (hasMoreOlder && generation === historyLoadGeneration && currentRoomId) {
+      const hasMore = await loadOlderMessageBatch({ preserveScroll: false });
+      if (!hasMore) break;
+      await new Promise((r) => setTimeout(r, 40));
+    }
+  } finally {
+    if (generation === historyLoadGeneration) autoLoadingHistory = false;
+  }
+}
+
+function scheduleAutoLoadHistory() {
+  if (!hasMoreOlder || autoLoadingHistory) return;
+  autoLoadAllHistory().catch(() => {});
 }
 
 function refreshMessageUI({ scrollPolicy = "if-near" } = {}) {
@@ -760,11 +778,7 @@ function refreshMessageUI({ scrollPolicy = "if-near" } = {}) {
       getMessage: (id) => allMsgs.find((m) => m.id === id),
       scrollPolicy: policy,
       newMessagesSince: loginMessageBaseline,
-      hasMoreOlder,
-      onLoadOlder: handleLoadOlderMessages,
     }, partner);
-
-    updateLoadOlderButton();
 
     renderPinnedBar(getPinnedMessage(), async (msgId) => {
       try {
@@ -837,30 +851,44 @@ async function handleSend() {
 async function handleImageSelect(e) {
   const file = e.target.files?.[0];
   e.target.value = "";
-  if (!file || !currentRoomId || !partnerUsername) return;
+  if (!file || !currentRoomId) return;
 
   const me = getCurrentUser();
   if (!me) return;
 
+  const caption = document.getElementById("messageInput")?.value?.trim() || "";
+  const replyTo = buildReplyPayload(replyToMessage);
+  let optimistic = null;
+
   try {
     setUploadProgress(true, 0);
     const { imageUrl, width, height } = await prepareImageForMessage(file, (p) =>
-      setUploadProgress(true, p),
-      currentRoomId
+      setUploadProgress(true, p)
     );
-    const caption = document.getElementById("messageInput")?.value?.trim() || "";
-    const replyTo = buildReplyPayload(replyToMessage);
 
     scrollToBottomNext = true;
-    await sendImageMessage(currentRoomId, imageUrl, { width, height, replyTo }, caption);
+    optimistic = await sendImageMessage(currentRoomId, imageUrl, { width, height, replyTo }, caption);
+    if (optimistic) {
+      pendingLocalMessages.push(optimistic);
+      refreshMessageUI({ scrollPolicy: "smooth" });
+    }
     clearMessageInput();
     replyToMessage = null;
     showReplyPreview(null);
     playSend();
     setUploadProgress(false);
-    showToast("ছবি পাঠানো হয়েছে", "success");
+    if (optimistic?.status === "pending" || optimistic?.status === "failed") {
+      showToast("ছবি অফলাইনে সংরক্ষিত — সংযোগ এলে পাঠানো হবে");
+    } else {
+      showToast("ছবি পাঠানো হয়েছে", "success");
+    }
+    if (navigator.onLine) flushOutbox();
   } catch (err) {
     setUploadProgress(false);
+    if (optimistic) {
+      pendingLocalMessages = pendingLocalMessages.filter((p) => p.localId !== optimistic.localId);
+      refreshMessageUI();
+    }
     playError();
     showToast(formatFirebaseError(err));
   }
@@ -1114,6 +1142,8 @@ async function openPartnerChat(partner) {
   recentMessages = [];
   hasMoreOlder = false;
   loadingOlder = false;
+  autoLoadingHistory = false;
+  historyLoadGeneration += 1;
   pendingLocalMessages = [];
   knownMessageIds = new Set();
   messagesInitialized = false;
@@ -1173,6 +1203,9 @@ async function openPartnerChat(partner) {
     });
 
     refreshMessageUI({ scrollPolicy: isInitialHistoryLoad ? "force" : "if-near" });
+    if (isInitialHistoryLoad && hasMoreOlder) {
+      scheduleAutoLoadHistory();
+    }
     scheduleMessageAck();
   }, roomClearedAt);
 }

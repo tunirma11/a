@@ -6,7 +6,17 @@ export function formatFirebaseError(err) {
     return message;
   }
 
+  if (
+    message === "Internal error." ||
+    message.includes("UnknownError") ||
+    err?.name === "UnknownError"
+  ) {
+    return "ব্রাউজার স্টোরেজ সমস্যা — সাইট ডেটা/ক্যাশ মুছে পেজ রিফ্রেশ করুন";
+  }
+
   switch (code) {
+    case "internal":
+      return "Firebase internal error — firestore.rules Publish করুন এবং পেজ রিফ্রেশ করুন";
     case "permission-denied":
       return "Firestore অনুমতি নেই — Anonymous Auth চালু করুন এবং firestore.rules Publish করুন";
     case "auth/operation-not-allowed":

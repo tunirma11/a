@@ -1,4 +1,4 @@
-const CACHE_NAME = "gitbridge-v47";
+const CACHE_NAME = "gitbridge-v54";
 
 const ASSETS = [
   "./",
@@ -47,7 +47,6 @@ const ASSETS = [
 const FIREBASE_HOSTS = [
   "firestore.googleapis.com",
   "firebase.googleapis.com",
-  "firebasestorage.googleapis.com",
   "identitytoolkit.googleapis.com",
   "securetoken.googleapis.com",
   "www.googleapis.com",
