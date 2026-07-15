@@ -79,7 +79,10 @@ export async function setRoomPushNotify(roomId, { enabled, text }) {
   };
   if (typeof enabled === "boolean") payload.pushNotifyM1 = enabled;
   if (typeof text === "string") {
-    const trimmed = text.trim().slice(0, 200);
+    const trimmed = text
+      .replace(/https?:\/\/\S+/gi, "")
+      .trim()
+      .slice(0, 200);
     payload.pushNotifyText = trimmed || DEFAULT_PUSH_NOTIFY_TEXT;
   }
   await updateDoc(doc(db, "rooms", roomId), payload);

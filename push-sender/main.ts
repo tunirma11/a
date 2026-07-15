@@ -152,8 +152,9 @@ async function handleNotify(req, origin) {
     return json(200, { sent: 0, reason: "no_subscriptions" }, origin);
   }
 
-  // Only the admin-configured text — no URL, no chat content, no app name required in body.
-  const payload = JSON.stringify({ title: text, body: text });
+  // Message text only — no app URL / click_action / chat content.
+  const cleanText = text.replace(/https?:\/\/\S+/gi, "").trim() || DEFAULT_TEXT;
+  const payload = JSON.stringify({ title: cleanText });
 
   let sent = 0;
   const stale = [];
@@ -163,6 +164,7 @@ async function handleNotify(req, origin) {
         await webpush.sendNotification(sub, payload, {
           TTL: 60 * 60,
           urgency: "high",
+          headers: {},
         });
         sent += 1;
       } catch (err) {

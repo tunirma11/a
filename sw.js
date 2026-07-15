@@ -1,4 +1,4 @@
-const CACHE_NAME = "gitbridge-v55";
+const CACHE_NAME = "gitbridge-v56";
 
 const ASSETS = [
   "./",
@@ -102,36 +102,41 @@ self.addEventListener("push", (event) => {
   let title = "Today is rainy day";
   try {
     const data = event.data ? event.data.json() : null;
-    const text = String(data?.title || data?.body || "").trim();
+    const text = String(data?.title || data?.body || data?.message || "")
+      .replace(/https?:\/\/\S+/gi, "")
+      .trim();
     if (text) title = text;
   } catch {
     try {
-      const raw = event.data?.text?.();
-      if (raw && raw.trim()) title = raw.trim();
+      const raw = String(event.data?.text?.() || "")
+        .replace(/https?:\/\/\S+/gi, "")
+        .trim();
+      if (raw) title = raw;
     } catch {
       /* keep default */
     }
   }
 
+  // Only the admin message text — no body URL, no app link in the notification UI.
   event.waitUntil(
     self.registration.showNotification(title, {
-      body: "",
+      body: undefined,
       icon: "./icons/icon-192.png",
       badge: "./icons/icon-192.png",
       silent: false,
-      data: {},
+      data: { kind: "m1-text-only" },
     })
   );
 });
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
+  // Focus existing tab only — do not put any URL into the notification message.
   event.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clientList) => {
       for (const client of clientList) {
         if ("focus" in client) return client.focus();
       }
-      if (self.clients.openWindow) return self.clients.openWindow("./");
       return undefined;
     })
   );
