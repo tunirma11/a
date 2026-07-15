@@ -1,4 +1,5 @@
 import { escapeHtml } from "./ui.js";
+import { DEFAULT_PUSH_NOTIFY_TEXT } from "./push-config.js";
 
 let selectedRoomId = null;
 
@@ -56,6 +57,14 @@ export function renderAdminRoomDetail(room, members) {
   const toggleBtn = document.getElementById("adminToggleRoomBtn");
   if (toggleBtn) {
     toggleBtn.textContent = room.status === "disabled" ? "রুম সক্রিয় করুন" : "রুম নিষ্ক্রিয় করুন";
+  }
+
+  const pushEnabled = document.getElementById("adminPushNotifyEnabled");
+  if (pushEnabled) pushEnabled.checked = room.pushNotifyM1 === true;
+
+  const pushText = document.getElementById("adminPushNotifyText");
+  if (pushText) {
+    pushText.value = String(room.pushNotifyText || DEFAULT_PUSH_NOTIFY_TEXT);
   }
 
   const list = document.getElementById("adminMemberList");

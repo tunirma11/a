@@ -1020,6 +1020,13 @@ html, body {
   background: #f8fbff;
 }
 
+.admin-push-settings {
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--border-color, rgba(0, 0, 0, 0.08));
+  border-radius: 0.5rem;
+  background: rgba(7, 94, 84, 0.04);
+}
+
 .admin-member-list {
   display: flex;
   flex-direction: column;

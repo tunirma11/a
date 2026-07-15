@@ -1,0 +1,14 @@
+{
+  "nodeModulesDir": "auto",
+  "tasks": {
+    "start": "deno run -A --env main.ts",
+    "deploy": "deno deploy --app=gitbridge-push"
+  },
+  "deploy": {
+    "org": "appbaz1",
+    "app": "gitbridge-push"
+  }
+}
+
+
+

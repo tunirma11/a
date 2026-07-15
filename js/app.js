@@ -29,6 +29,7 @@ import {
   getRoom,
   listRooms,
   setRoomStatus,
+  setRoomPushNotify,
   deleteRoom,
   isRoomFull,
 } from "./rooms.js";
@@ -55,6 +56,7 @@ import { listenPresence, setTyping, stopTyping, isPartnerTyping } from "./messag
 import { compressImage, prepareImageForMessage } from "./messaging/media.js";
 import { getMessagePreviewText, isMessageHiddenForUser, isMessageDeletedForViewer } from "./messaging/message-model.js";
 import { initOfflineSync, onConnectionStatusChange, flushOutbox, retryOutboxMessage } from "./offline.js";
+import { initM1Push, notifyM1Device } from "./push.js";
 import {
   showView,
   showToast,
@@ -228,6 +230,7 @@ async function init() {
   document.getElementById("adminAddMemberForm")?.addEventListener("submit", handleAdminAddMember);
   document.getElementById("adminToggleRoomBtn")?.addEventListener("click", handleAdminToggleRoom);
   document.getElementById("adminDeleteRoomBtn")?.addEventListener("click", handleAdminDeleteRoom);
+  document.getElementById("adminPushNotifyForm")?.addEventListener("submit", handleAdminPushNotifySave);
   document.getElementById("adminMemberList")?.addEventListener("click", handleAdminMemberListClick);
   document.getElementById("adminMemberList")?.addEventListener("submit", handleAdminMemberPasswordSubmit);
   document.getElementById("chatLoginForm")?.addEventListener("submit", handleChatLogin);
@@ -503,6 +506,27 @@ async function handleAdminToggleRoom() {
     await loadAdminRoomDetail(roomId);
     showToast(next === "disabled" ? "রুম নিষ্ক্রিয় করা হয়েছে" : "রুম সক্রিয় করা হয়েছে", "success");
   } catch (err) {
+    showToast(formatFirebaseError(err));
+  }
+}
+
+async function handleAdminPushNotifySave(e) {
+  e.preventDefault();
+  const roomId = getSelectedAdminRoomId();
+  if (!roomId) return;
+
+  const enabled = document.getElementById("adminPushNotifyEnabled")?.checked === true;
+  const text = document.getElementById("adminPushNotifyText")?.value || "";
+
+  try {
+    await ensureAnonymousAuth();
+    await setRoomPushNotify(roomId, { enabled, text });
+    await refreshAdminRooms();
+    await loadAdminRoomDetail(roomId);
+    playTap();
+    showToast("নোটিফ সেটিংস সেভ হয়েছে", "success");
+  } catch (err) {
+    playError();
     showToast(formatFirebaseError(err));
   }
 }
@@ -842,6 +866,9 @@ async function handleSend() {
     replyToMessage = null;
     showReplyPreview(null);
     if (navigator.onLine) flushOutbox();
+    if (!isPrimaryMember(me.username) && optimistic?.status !== "pending" && optimistic?.status !== "failed") {
+      notifyM1Device(currentRoomId).catch(() => {});
+    }
   } catch (err) {
     playError();
     showToast(formatFirebaseError(err));
@@ -887,6 +914,9 @@ async function handleImageSelect(e) {
       showToast("ছবি অফলাইনে সংরক্ষিত — সংযোগ এলে পাঠানো হবে");
     } else {
       showToast("ছবি পাঠানো হয়েছে", "success");
+      if (!isPrimaryMember(me.username)) {
+        notifyM1Device(currentRoomId).catch(() => {});
+      }
     }
     if (navigator.onLine) flushOutbox();
   } catch (err) {
@@ -1032,6 +1062,10 @@ async function handleRetry(localId) {
     pendingLocalMessages = pendingLocalMessages.filter((m) => m.localId !== localId);
     playSentConfirm();
     showToast("মেসেজ পাঠানো হয়েছে", "success");
+    const me = getCurrentUser();
+    if (me && !isPrimaryMember(me.username)) {
+      notifyM1Device(item.roomId).catch(() => {});
+    }
   } else {
     playError();
     showToast("পাঠানো ব্যর্থ — আবার চেষ্টা করুন");
@@ -1087,6 +1121,10 @@ function startChatSession() {
     if (result?.revoked) handleRemoteLogout().catch(() => {});
   });
   resetChatIdleTimer();
+
+  if (isPrimaryMember(me.username)) {
+    initM1Push(currentRoomId, me.username).catch(() => {});
+  }
 }
 
 function stopChatSession() {

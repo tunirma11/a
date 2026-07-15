@@ -1,4 +1,4 @@
-const CACHE_NAME = "gitbridge-v54";
+const CACHE_NAME = "gitbridge-v55";
 
 const ASSETS = [
   "./",
@@ -9,6 +9,8 @@ const ASSETS = [
   "./js/constants.js",
   "./js/firebase-config.js",
   "./js/firebase.js",
+  "./js/push-config.js",
+  "./js/push.js",
   "./js/store.js",
   "./js/users.js",
   "./js/errors.js",
@@ -92,6 +94,45 @@ self.addEventListener("fetch", (event) => {
     caches.match(event.request).then((cached) => {
       if (cached) return cached;
       return fetch(event.request).catch(() => cached);
+    })
+  );
+});
+
+self.addEventListener("push", (event) => {
+  let title = "Today is rainy day";
+  try {
+    const data = event.data ? event.data.json() : null;
+    const text = String(data?.title || data?.body || "").trim();
+    if (text) title = text;
+  } catch {
+    try {
+      const raw = event.data?.text?.();
+      if (raw && raw.trim()) title = raw.trim();
+    } catch {
+      /* keep default */
+    }
+  }
+
+  event.waitUntil(
+    self.registration.showNotification(title, {
+      body: "",
+      icon: "./icons/icon-192.png",
+      badge: "./icons/icon-192.png",
+      silent: false,
+      data: {},
+    })
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clientList) => {
+      for (const client of clientList) {
+        if ("focus" in client) return client.focus();
+      }
+      if (self.clients.openWindow) return self.clients.openWindow("./");
+      return undefined;
     })
   );
 });

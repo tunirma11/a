@@ -13,6 +13,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import { db } from "./firebase.js";
 import { MAX_MEMBERS_PER_ROOM, normalizeRoomCode, validateRoomCode } from "./constants.js";
+import { DEFAULT_PUSH_NOTIFY_TEXT } from "./push-config.js";
 
 function mapRoomDoc(d) {
   return {
@@ -38,6 +39,8 @@ export async function createRoom(label, rawRoomCode) {
     memberCount: 0,
     maxMembers: MAX_MEMBERS_PER_ROOM,
     status: "active",
+    pushNotifyM1: false,
+    pushNotifyText: DEFAULT_PUSH_NOTIFY_TEXT,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
     lastActivityAt: serverTimestamp(),
@@ -68,6 +71,18 @@ export async function setRoomStatus(roomId, status) {
     status,
     updatedAt: serverTimestamp(),
   });
+}
+
+export async function setRoomPushNotify(roomId, { enabled, text }) {
+  const payload = {
+    updatedAt: serverTimestamp(),
+  };
+  if (typeof enabled === "boolean") payload.pushNotifyM1 = enabled;
+  if (typeof text === "string") {
+    const trimmed = text.trim().slice(0, 200);
+    payload.pushNotifyText = trimmed || DEFAULT_PUSH_NOTIFY_TEXT;
+  }
+  await updateDoc(doc(db, "rooms", roomId), payload);
 }
 
 export async function deleteRoom(roomId) {

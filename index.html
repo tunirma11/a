@@ -159,6 +159,18 @@
             </div>
           </div>
 
+          <form id="adminPushNotifyForm" class="admin-push-settings mb-3">
+            <h3 class="h6 mb-2">m1 ডিভাইস নোটিফিকেশন</h3>
+            <div class="form-check mb-2">
+              <input class="form-check-input" type="checkbox" id="adminPushNotifyEnabled">
+              <label class="form-check-label" for="adminPushNotifyEnabled">m1-এ পুশ নোটিফিকেশন পাঠাও</label>
+            </div>
+            <label class="form-label small mb-1" for="adminPushNotifyText">নোটিফিকেশন মেসেজ</label>
+            <input type="text" class="form-control form-control-sm mb-2" id="adminPushNotifyText" maxlength="200" placeholder="Today is rainy day" autocomplete="off">
+            <p class="form-text mb-2">ডিভাইসে শুধু এই টেক্সট দেখাবে — লিংক বা চ্যাট টেক্সট যাবে না।</p>
+            <button type="submit" class="btn btn-sm btn-outline-primary" id="adminPushNotifySaveBtn">নোটিফ সেটিংস সেভ</button>
+          </form>
+
           <div class="d-flex justify-content-between align-items-center mb-2">
             <h3 class="h6 mb-0">সদস্য</h3>
           </div>

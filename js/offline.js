@@ -2,6 +2,8 @@ import { getPendingMessages, updateOutboxMessage, removeFromOutbox } from "./sto
 import { sendMessageToServer, retryOutboxMessage } from "./messaging/messages.js";
 import { getCurrentUser } from "./auth.js";
 import { buildMessagePayload, MESSAGE_TYPES } from "./messaging/message-model.js";
+import { isPrimaryMember } from "./users.js";
+import { notifyM1Device } from "./push.js";
 
 let connectionStatus = "online";
 let statusCallback = null;
@@ -55,6 +57,9 @@ export async function flushOutbox() {
         });
         await sendMessageToServer(item.roomId, payload, item.id);
         await removeFromOutbox(item.id);
+        if (me && !isPrimaryMember(me.username)) {
+          notifyM1Device(item.roomId).catch(() => {});
+        }
       } catch {
         const retries = (item.retries || 0) + 1;
         await updateOutboxMessage(item.id, {
