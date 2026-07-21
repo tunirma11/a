@@ -122,16 +122,19 @@ function renderImageContent(msg) {
 }
 
 function renderReactions(msg, myUsername) {
+  if (!msg?.id || isMessageDeletedForViewer(msg, myUsername)) return "";
   const reactions = msg.reactions || {};
   const entries = Object.entries(reactions).filter(([, users]) => users?.length);
-  if (!entries.length) return "";
   const pills = entries
     .map(([emoji, users]) => {
       const active = users.includes(myUsername) ? " active" : "";
-      return `<button type="button" class="msg-reaction-pill${active}" data-msg-id="${msg.id}" data-emoji="${emoji}">${emoji}<span>${users.length}</span></button>`;
+      return `<button type="button" class="msg-reaction-pill${active}" data-msg-id="${msg.id}" data-emoji="${escapeHtml(emoji)}">${emoji}<span>${users.length}</span></button>`;
     })
     .join("");
-  return `<div class="msg-reactions">${pills}</div>`;
+  return `<div class="msg-reactions" data-msg-id="${msg.id}">
+    ${pills}
+    <button type="button" class="msg-react-add" data-msg-id="${msg.id}" title="রিঅ্যাকশন" aria-label="রিঅ্যাকশন যোগ করুন">＋</button>
+  </div>`;
 }
 
 function renderPartnerDeleteWarning(msg, currentUsername) {
@@ -376,6 +379,16 @@ function ensureMessageEvents(container) {
       messageHandlers.onReaction?.(pill.dataset.msgId, pill.dataset.emoji);
       return;
     }
+    const addReact = e.target.closest(".msg-react-add");
+    if (addReact) {
+      const rect = addReact.getBoundingClientRect();
+      messageHandlers.onReactPicker?.(
+        addReact.dataset.msgId,
+        rect.left + rect.width / 2,
+        rect.top
+      );
+      return;
+    }
     const imgBtn = e.target.closest(".msg-image-btn");
     if (imgBtn) {
       messageHandlers.onImageOpen?.(imgBtn.dataset.imageUrl, imgBtn.dataset.downloadName);
@@ -617,6 +630,43 @@ export function showMessageContextMenu(x, y, items, onSelect) {
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
       onSelect?.(btn.dataset.action);
+      close();
+    });
+  });
+
+  setTimeout(() => document.addEventListener("click", close), 0);
+}
+
+export function showReactionPicker(x, y, onSelect) {
+  let picker = document.getElementById("msgReactionPicker");
+  if (!picker) {
+    picker = document.createElement("div");
+    picker.id = "msgReactionPicker";
+    picker.className = "msg-reaction-picker";
+    picker.setAttribute("role", "listbox");
+    document.body.appendChild(picker);
+  }
+
+  picker.innerHTML = REACTION_EMOJIS.map(
+    (emoji) =>
+      `<button type="button" class="msg-reaction-pick" data-emoji="${emoji}" role="option" aria-label="${emoji}">${emoji}</button>`
+  ).join("");
+
+  picker.classList.remove("d-none");
+  const width = Math.min(280, window.innerWidth - 16);
+  picker.style.width = `${width}px`;
+  picker.style.left = `${Math.max(8, Math.min(x - width / 2, window.innerWidth - width - 8))}px`;
+  picker.style.top = `${Math.max(8, Math.min(y - 56, window.innerHeight - 80))}px`;
+
+  const close = () => {
+    picker.classList.add("d-none");
+    document.removeEventListener("click", close);
+  };
+
+  picker.querySelectorAll(".msg-reaction-pick").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      onSelect?.(btn.dataset.emoji);
       close();
     });
   });

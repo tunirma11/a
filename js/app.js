@@ -73,6 +73,7 @@ import {
   showChatReady,
   updatePartnerHeader,
   showMessageContextMenu,
+  showReactionPicker,
   showReplyPreview,
   showSearchOverlay,
   showImageLightbox,
@@ -861,6 +862,7 @@ function refreshMessageUI({ scrollPolicy = "if-near" } = {}) {
       onRetry: handleRetry,
       onContextMenu: handleMessageContextMenu,
       onReaction: handleReactionToggle,
+      onReactPicker: handleReactPicker,
       onImageOpen: (url, name) => showImageLightbox(url, name),
       partnerUsername,
       currentUsername: me.username,
@@ -1022,12 +1024,10 @@ function handleMessageContextMenu(e, msg) {
 
   const items = [
     { action: "reply", label: "উত্তর দিন" },
-    { action: "copy", label: "কপি করুন" },
-    { action: "pin", label: msg.pinned ? "আনপিন করুন" : "পিন করুন" },
   ];
 
   if (msg.imageUrl && !isMessageDeletedForViewer(msg, me.username)) {
-    items.splice(1, 0, { action: "download", label: "ছবি ডাউনলোড" });
+    items.push({ action: "download", label: "ছবি ডাউনলোড" });
   }
 
   if (canDeletePrimary || canDeleteSecondary) {
@@ -1038,8 +1038,6 @@ function handleMessageContextMenu(e, msg) {
     items.push({ action: "removeCompletely", label: "সরিয়ে ফেলুন", danger: true });
   }
 
-  items.push({ action: "react", label: "রিঅ্যাকশন" });
-
   showMessageContextMenu(x, y, items, async (action) => {
     try {
       if (action === "reply") {
@@ -1049,9 +1047,6 @@ function handleMessageContextMenu(e, msg) {
           showReplyPreview(null);
         });
         focusMessageInput();
-      } else if (action === "copy") {
-        await navigator.clipboard.writeText(getMessagePreviewText(msg, me.username));
-        showToast("কপি হয়েছে", "success");
       } else if (action === "download") {
         const ts = msg.createdAt || Date.now();
         const sender = String(msg.senderName || msg.senderId || "image")
@@ -1062,8 +1057,6 @@ function handleMessageContextMenu(e, msg) {
         const date = new Date(typeof ts === "number" ? ts : ts).toISOString().slice(0, 10);
         downloadImage(msg.imageUrl, `gitbridge-${sender}-${date}.webp`);
         showToast("ডাউনলোড শুরু হয়েছে", "success");
-      } else if (action === "pin") {
-        await toggleMessagePin(currentRoomId, msg.id, !msg.pinned);
       } else if (action === "delete") {
         const confirmText = primary
           ? "এই মেসেজ উভয় পক্ষ থেকে মুছে ফেলবেন?"
@@ -1076,12 +1069,18 @@ function handleMessageContextMenu(e, msg) {
       } else if (action === "removeCompletely") {
         if (!primary) return;
         await removeMessageCompletely(currentRoomId, msg.id);
-      } else if (action === "react") {
-        await toggleReaction(currentRoomId, msg.id, "👍", msg.reactions || {});
       }
     } catch (err) {
       showToast(formatFirebaseError(err));
     }
+  });
+}
+
+function handleReactPicker(messageId, x, y) {
+  const msg = currentMessages.find((m) => m.id === messageId);
+  if (!msg || !currentRoomId) return;
+  showReactionPicker(x, y, (emoji) => {
+    handleReactionToggle(messageId, emoji).catch(() => {});
   });
 }
 

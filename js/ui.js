@@ -9,6 +9,7 @@ export {
   bindMessagesScroll,
   isOwnMessage,
   showMessageContextMenu,
+  showReactionPicker,
   showReplyPreview,
   showSearchOverlay,
   showImageLightbox,

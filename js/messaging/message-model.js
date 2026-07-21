@@ -5,7 +5,23 @@ export const MESSAGE_TYPES = {
   SYSTEM: "system",
 };
 
-export const REACTION_EMOJIS = ["👍", "❤️", "😂", "😮", "😢", "👏"];
+export const REACTION_EMOJIS = [
+  "👍",
+  "👎",
+  "❤️",
+  "😂",
+  "😊",
+  "😍",
+  "😮",
+  "😢",
+  "😭",
+  "😔",
+  "😡",
+  "🙏",
+  "👏",
+  "🔥",
+  "🎉",
+];
 
 export function normalizeTimestamp(value) {
   if (!value) return 0;
