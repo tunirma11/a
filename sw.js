@@ -1,4 +1,4 @@
-const CACHE_NAME = "gitbridge-v58";
+const CACHE_NAME = "gitbridge-v59";
 
 const ASSETS = [
   "./",
@@ -83,6 +83,8 @@ self.addEventListener("fetch", (event) => {
           if (response.status === 404) {
             return caches.match("./index.html");
           }
+          const copy = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy)).catch(() => {});
           return response;
         })
         .catch(() => caches.match("./index.html"))
@@ -90,10 +92,39 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
+  // JS/CSS: network-first so Safari/PWA picks up deploys without reinstall
+  const isCodeAsset =
+    url.pathname.endsWith(".js") ||
+    url.pathname.endsWith(".css") ||
+    url.pathname.endsWith("sw.js");
+
+  if (isCodeAsset) {
+    event.respondWith(
+      fetch(event.request)
+        .then((response) => {
+          if (response.ok) {
+            const copy = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy)).catch(() => {});
+          }
+          return response;
+        })
+        .catch(() => caches.match(event.request))
+    );
+    return;
+  }
+
   event.respondWith(
     caches.match(event.request).then((cached) => {
       if (cached) return cached;
-      return fetch(event.request).catch(() => cached);
+      return fetch(event.request)
+        .then((response) => {
+          if (response.ok) {
+            const copy = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy)).catch(() => {});
+          }
+          return response;
+        })
+        .catch(() => cached);
     })
   );
 });

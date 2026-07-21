@@ -1398,9 +1398,19 @@ function initDeviceLifecycle() {
 }
 
 function registerServiceWorker() {
-  if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.register("./sw.js").catch(() => {});
-  }
+  if (!("serviceWorker" in navigator)) return;
+  navigator.serviceWorker
+    .register("./sw.js")
+    .then((reg) => {
+      // Ask Safari/Chrome for a fresh SW when the app opens
+      reg.update().catch(() => {});
+      document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "visible") {
+          reg.update().catch(() => {});
+        }
+      });
+    })
+    .catch(() => {});
 }
 
 function isIosDevice() {

@@ -210,7 +210,11 @@ Deno.serve(async (req) => {
   }
 
   if (req.method === "GET" && (url.pathname === "/" || url.pathname === "/health")) {
-    return json(200, { ok: true, service: "gitbridge-push-sender" }, origin);
+    return json(200, {
+      ok: true,
+      service: "gitbridge-push-sender",
+      features: { targetM1: true, targetM2: true, m2IgnoresAdmin: true },
+    }, origin);
   }
 
   if (req.method === "POST" && url.pathname === "/notify") {

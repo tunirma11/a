@@ -168,7 +168,8 @@ export async function notifyM1Device(roomId) {
 }
 
 /**
- * Notify m2 — if m2 enabled receive (no admin gate).
+ * Notify m2 — ONLY depends on members/m2.pushNotifyEnabled (chat toggle).
+ * Does NOT read or require rooms.pushNotifyM1 (admin can be OFF).
  * Call after m1 successfully sends.
  */
 export async function notifyM2Device(roomId) {
@@ -177,6 +178,7 @@ export async function notifyM2Device(roomId) {
   if (!me) return;
 
   try {
+    // Admin panel pushNotifyM1 is intentionally ignored here.
     const enabled = await getM2PushEnabled(roomId);
     if (!enabled) return;
     await postNotify(roomId, "m2");
