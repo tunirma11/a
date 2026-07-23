@@ -7,7 +7,9 @@ import {
   collection,
   getDocs,
   query,
+  where,
   orderBy,
+  limit,
   serverTimestamp,
   writeBatch,
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
@@ -88,30 +90,17 @@ export async function setRoomPushNotify(roomId, { enabled, text }) {
   await updateDoc(doc(db, "rooms", roomId), payload);
 }
 
-export async function deleteRoom(roomId) {
-  const roomRef = doc(db, "rooms", roomId);
-  const roomSnap = await getDoc(roomRef);
-  if (!roomSnap.exists()) throw new Error("রুম পাওয়া যায়নি");
-
-  try {
-    const membersSnap = await getDocs(collection(db, "rooms", roomId, "members"));
-    for (const member of membersSnap.docs) {
-      await deleteDoc(member.ref);
-    }
-  } catch (err) {
-    if (err?.code === "permission-denied") {
-      throw new Error("সদস্য মুছতে অনুমতি নেই — firestore.rules Publish করুন");
-    }
-    throw err;
-  }
-
-  try {
-    const messagesSnap = await getDocs(collection(db, "rooms", roomId, "messages"));
+async function deleteCollectionDocs(colRef, { pageSize = 400 } = {}) {
+  let deleted = 0;
+  for (;;) {
+    const snap = await getDocs(query(colRef, limit(pageSize)));
+    if (snap.empty) break;
     let batch = writeBatch(db);
     let ops = 0;
-    for (const msg of messagesSnap.docs) {
-      batch.delete(msg.ref);
-      ops++;
+    for (const d of snap.docs) {
+      batch.delete(d.ref);
+      ops += 1;
+      deleted += 1;
       if (ops >= 450) {
         await batch.commit();
         batch = writeBatch(db);
@@ -119,34 +108,69 @@ export async function deleteRoom(roomId) {
       }
     }
     if (ops > 0) await batch.commit();
-  } catch (err) {
-    if (err?.code === "permission-denied") {
-      throw new Error("মেসেজ মুছতে অনুমতি নেই — firestore.rules Publish করুন");
-    }
-    throw err;
+    if (snap.size < pageSize) break;
   }
+  return deleted;
+}
 
-  try {
-    const presenceSnap = await getDocs(collection(db, "rooms", roomId, "presence"));
-    for (const p of presenceSnap.docs) {
-      await deleteDoc(p.ref);
-    }
-    const metaSnap = await getDocs(collection(db, "rooms", roomId, "meta"));
-    for (const m of metaSnap.docs) {
-      await deleteDoc(m.ref);
-    }
-  } catch {
-    /* optional cleanup */
-  }
+/**
+ * Delete room and all nested data: members, messages, presence, meta,
+ * plus users/{uid} profiles that belong to this room.
+ */
+export async function deleteRoom(roomId) {
+  const roomRef = doc(db, "rooms", roomId);
+  const roomSnap = await getDoc(roomRef);
+  if (!roomSnap.exists()) throw new Error("রুম পাওয়া যায়নি");
 
-  try {
-    await deleteDoc(roomRef);
-  } catch (err) {
-    if (err?.code === "permission-denied") {
-      throw new Error("রুম মুছতে অনুমতি নেই — firestore.rules Publish করুন");
+  const wipe = async (label, fn) => {
+    try {
+      return await fn();
+    } catch (err) {
+      if (err?.code === "permission-denied") {
+        throw new Error(
+          `${label} মুছতে অনুমতি নেই — Firebase Console-এ firestore.rules Publish করুন`
+        );
+      }
+      throw err;
     }
-    throw err;
-  }
+  };
+
+  await wipe("মেসেজ", () =>
+    deleteCollectionDocs(collection(db, "rooms", roomId, "messages"))
+  );
+  await wipe("সদস্য", () =>
+    deleteCollectionDocs(collection(db, "rooms", roomId, "members"))
+  );
+  await wipe("presence", () =>
+    deleteCollectionDocs(collection(db, "rooms", roomId, "presence"))
+  );
+  await wipe("meta", () =>
+    deleteCollectionDocs(collection(db, "rooms", roomId, "meta"))
+  );
+
+  await wipe("ইউজার প্রোফাইল", async () => {
+    const usersSnap = await getDocs(
+      query(collection(db, "users"), where("roomId", "==", roomId))
+    );
+    if (usersSnap.empty) return 0;
+    let batch = writeBatch(db);
+    let ops = 0;
+    let deleted = 0;
+    for (const u of usersSnap.docs) {
+      batch.delete(u.ref);
+      ops += 1;
+      deleted += 1;
+      if (ops >= 450) {
+        await batch.commit();
+        batch = writeBatch(db);
+        ops = 0;
+      }
+    }
+    if (ops > 0) await batch.commit();
+    return deleted;
+  });
+
+  await wipe("রুম", () => deleteDoc(roomRef));
 }
 
 export function isRoomFull(room) {

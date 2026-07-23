@@ -21,6 +21,12 @@ service cloud.firestore {
       return userDoc().username;
     }
 
+    // Admin panel uses anonymous auth without a users/{uid} chat profile.
+    // Room wipe needs the same auth level as rooms/{id} delete.
+    function canWipeRoomData() {
+      return request.auth != null;
+    }
+
     function validMemberData() {
       return request.resource.data.id is string
         && request.resource.data.name is string
@@ -86,7 +92,7 @@ service cloud.firestore {
         && request.resource.data.memberCount == 0
         && request.resource.data.status == "active";
       allow update: if request.auth != null;
-      allow delete: if request.auth != null;
+      allow delete: if canWipeRoomData();
 
       match /members/{username} {
         allow read: if true;
@@ -95,22 +101,31 @@ service cloud.firestore {
           && validMemberData()
           && request.resource.data.id == username;
         allow update: if request.auth != null;
-        allow delete: if request.auth != null;
+        allow delete: if canWipeRoomData();
       }
 
       match /presence/{username} {
-        allow read: if isRoomMember(roomId);
-        allow write: if isRoomMember(roomId) && username == myUsername();
+        allow read: if isRoomMember(roomId) || canWipeRoomData();
+        allow create, update: if isRoomMember(roomId) && username == myUsername();
+        allow delete: if canWipeRoomData()
+          || (isRoomMember(roomId) && username == myUsername());
       }
 
       match /meta/{docId} {
-        allow read: if isRoomMember(roomId);
-        allow write: if isRoomMember(roomId);
+        allow read: if isRoomMember(roomId) || canWipeRoomData();
+        allow create, update: if isRoomMember(roomId);
+        allow delete: if canWipeRoomData() || isRoomMember(roomId);
       }
 
       match /messages/{msgId} {
-        allow read: if isRoomMember(roomId);
-        allow delete: if isRoomMember(roomId) && myUsername() == "m1";
+        // Admin room wipe must list+delete; members keep chat access
+        allow read: if isRoomMember(roomId) || canWipeRoomData();
+        // Chat hard-remove: m1 only. Room wipe: admin or auth user not in this room as m2.
+        allow delete: if request.auth != null && (
+          !hasUserProfile()
+          || userDoc().roomId != roomId
+          || myUsername() == "m1"
+        );
         allow create: if validMessageCreate(roomId);
         allow update: if isRoomMember(roomId) && validMessageUpdate();
       }
@@ -121,13 +136,15 @@ service cloud.firestore {
         && (
           request.auth.uid == uid
           || (hasUserProfile() && resource.data.roomId == userDoc().roomId)
+          || canWipeRoomData()
         );
       allow create: if request.auth != null
         && request.auth.uid == uid
         && request.resource.data.roomId is string
         && request.resource.data.username is string;
       allow update: if request.auth != null && request.auth.uid == uid;
-      allow delete: if false;
+      // Room wipe deletes user profiles for that room
+      allow delete: if canWipeRoomData();
     }
   }
 }
